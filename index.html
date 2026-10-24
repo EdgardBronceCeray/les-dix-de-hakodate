@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Les Dix de Hakodate · L'aventure de De Nicol</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<canvas id="sea"></canvas>
+<canvas id="fx2d"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="h-mission" class="plaque tl">
+    <div class="corner"></div>
+    <div class="lvl"><span id="h-level-l"></span><b id="h-level">1</b></div>
+    <div id="h-goal" class="goal"></div>
+    <div id="h-hint" class="hint"></div>
+    <div id="h-crates" class="crates"></div>
+  </div>
+
+  <div id="h-scorebox" class="plaque tr">
+    <div class="sc"><span id="h-score-l">Score</span><b id="h-score">0</b></div>
+    <div class="sc2"><span id="h-score-l2"></span><i id="h-best">0</i></div>
+  </div>
+
+  <div id="h-ship" class="plaque bl">
+    <div class="shipname"><b id="h-ship-name">Kaiten</b><span id="h-ship-jp" class="jp">回天</span></div>
+    <div class="row"><span class="ico" id="h-ico-hull"></span><div class="gauge"><i id="h-hull"></i><span class="gloss"></span></div><span class="n" id="h-hull-n"></span></div>
+    <div class="row"><span class="ico" id="h-ico-eng"></span><div class="telegraph"><span class="zero"></span><i id="h-thr"></i></div><span class="n" id="h-thr-n"></span></div>
+    <div class="row hidden" id="h-auto-row"><span class="ico" id="h-ico-auto"></span><div class="gauge auto"><i id="h-auto"></i><span class="gloss"></span></div><span class="n" id="h-auto-n"></span></div>
+    <div class="row hidden" id="h-fleet-row"><span class="ico" id="h-ico-fleet"></span><div class="fleetbars" id="h-fleet"></div><span class="n" id="h-fleet-n"></span></div>
+    <div id="h-ups" class="ups"></div>
+    <div id="h-flag" class="flagline hidden"></div>
+  </div>
+
+  <div id="h-map" class="minimap"><canvas id="minimap"></canvas><span class="north">N</span></div>
+
+  <div id="orders"><div class="orn"></div><div id="orders-k" class="k"></div><div id="orders-t" class="t"></div></div>
+</div>
+
+<div id="banner"><div class="orn"></div><canvas id="banner-t"></canvas><div id="banner-s"></div><div class="orn b"></div></div>
+
+<div id="pause-veil" class="hidden"></div>
+<div id="menu" class="menu hidden"></div>
+
+<div id="loading" class="hidden"><div class="wheel"></div><span id="loading-t"></span></div>
+
+<script src="js/lib/three.min.js"></script>
+<script src="js/core.js"></script>
+<script src="js/lang.js"></script>
+<script src="js/music-data.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/data.js"></script>
+<script src="js/stages.js"></script>
+<script src="js/recit.js"></script>
+<script src="js/credits.js"></script>
+<script src="js/maps.js"></script>
+<script src="js/japan.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/models.js"></script>
+<script src="js/ships3d.js"></script>
+<script src="js/debris.js"></script>
+<script src="js/render3d.js"></script>
+<script src="js/villages.js"></script>
+<script src="js/terrain.js"></script>
+<script src="js/world.js"></script>
+<script src="js/arcade.js"></script>
+<script src="js/corsaire.js"></script>
+<script src="js/shipyard.js"></script>
+<script src="js/fleet.js"></script>
+<script src="js/creatures.js"></script>
+<script src="js/story.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/menu.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
