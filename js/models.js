@@ -244,26 +244,22 @@ function mergeStatic(root, keep) {
 
 /* ---------- objets de la mer ---------- */
 
-/* brûlot : une jonque bourrée de paille et de poix, en flammes */
+/* brûlot : une jonque bourrée de paille et de poix, en flammes (la coque : boats.js) */
 function buildFireBoat(r) {
   const g = new THREE.Group();
-  const L = r * 2.1 / SCALE, B = L * 0.34;
-  const H = buildHull({ L, B, look: {} }, { freeboard: 1.2 });
-  const hull = new THREE.Mesh(H.sides, new THREE.MeshStandardMaterial({ color: 0x1c140e, roughness: 0.9, emissive: 0x501400, emissiveIntensity: 0.6 }));
-  hull.castShadow = true;
+  const L = Math.round(r * 2.1 / SCALE), geo = fireHullGeo(L), f = geo.userData.f;
+  const hull = new THREE.Mesh(geo, BOATMAT());
+  hull.userData.sharedGeo = true; hull.castShadow = true; hull.receiveShadow = true;
   g.add(hull);
-  /* le chargement qui brûle : fagots incandescents */
-  const ember = new THREE.MeshStandardMaterial({ color: 0x2a1408, emissive: 0xff6a18, emissiveIntensity: 1.4, roughness: 1 });
-  for (let i = 0; i < 5; i++) {
-    const f = new THREE.Mesh(new THREE.BoxGeometry(L * 0.16, 1.1 + (i % 2) * 0.5, B * 0.55), ember);
-    f.position.set((i - 2) * L * 0.15, 1.5 + (i % 2) * 0.3, ((i * 37) % 5 - 2) * 0.12);
-    f.rotation.y = (i - 2) * 0.25;
-    g.add(f);
+  /* le chargement qui brûle : des fagots incandescents, entassés à ras du plat-bord */
+  const ember = MODELS.mats.ember || (MODELS.mats.ember = new THREE.MeshStandardMaterial({ color: 0x2a1408, emissive: 0xff6a18, emissiveIntensity: 1.4, roughness: 1 }));
+  for (let i = 0; i < 6; i++) {
+    const t = -0.62 + i * 0.22, w = f.hw(t) * 1.1;
+    const b = new THREE.Mesh(new THREE.BoxGeometry(L * 0.13, 1.2 + (i % 2) * 0.6, w), ember);
+    b.position.set(f.X(t), f.yg(t) - 0.2 + (i % 2) * 0.3, ((i * 37) % 5 - 2) * 0.12);
+    b.rotation.y = (i - 2.5) * 0.18;
+    g.add(b);
   }
-  /* le mât, nu, noirci */
-  const m = cyl(0.18, 0.25, L * 0.5, '#120c08', 6);
-  m.position.set(L * 0.1, L * 0.25 + 1, 0); m.rotation.z = 0.25;
-  g.add(m);
   return mergeStatic(g);
 }
 
@@ -274,21 +270,6 @@ function buildCrate(kind) {
   const g = new THREE.Group();
   g.add(m);
   m.position.y = s * 0.45;
-  return g;
-}
-
-/* chaloupe chargée d'hommes */
-function buildLaunch() {
-  const g = new THREE.Group();
-  const H = buildHull({ L: 9, B: 2.6, look: {} }, { freeboard: 0.8 });
-  const hull = new THREE.Mesh(H.sides, woodMat('#7a5a38'));
-  hull.castShadow = true;
-  g.add(hull);
-  const men = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.32, 0.6, 2, 6), stdMat('#20242c', 0.9), 6);
-  const M = new THREE.Matrix4();
-  for (let i = 0; i < 6; i++) { M.makeTranslation(-3 + i * 1.2, 1.1, i % 2 ? 0.55 : -0.55); men.setMatrixAt(i, M); }
-  men.castShadow = true;
-  g.add(men);
   return g;
 }
 

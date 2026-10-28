@@ -1410,20 +1410,6 @@ function syncCrate(c, kind) {
   ring.material.opacity = (0.22 + pulse * 0.25) * (sink ? (1 - sink) * (0.55 + 0.45 * Math.sin(W.t * 16)) : 1);
 }
 
-function syncLaunch(b) {
-  /* les chaloupes à recueillir brillent d'or ; les barques du village à tenir au large, de rouge ;
-   * les canots de l'équipage qui gagnent la grève, de rien */
-  const m = keep(b, () => { const g = buildLaunch(); g.scale.setScalar(SCALE); if (!b.noRing) { const ring = glowRing(b.barque ? new THREE.Color(1.6, 0.45, 0.3) : new THREE.Color(1.5, 1.2, 0.6), 60); R3.scene.add(ring); g.userData.ring = ring; } return g; });
-  m.position.set(b.x, Math.sin(b.bob) * 0.5, b.y);
-  m.rotation.y = -b.h;
-  if (!m.userData.ring) return;
-  if (b.barque && b.state === 'back') { m.userData.ring.visible = false; return; }
-  m.userData.ring.position.set(b.x, 0.9, b.y);
-  const pulse = 0.5 + 0.5 * Math.sin(b.bob * 2);
-  m.userData.ring.scale.setScalar(54 + pulse * 8);
-  m.userData.ring.material.opacity = 0.3 + pulse * 0.3;
-}
-
 function syncWreck(w) {
   const m = keep(w, () => { const g = buildWreck(w.w); g.scale.setScalar(SCALE); return g; });
   m.position.set(w.x, 0, w.y);
@@ -1549,9 +1535,11 @@ function render3D(dt) {
   for (const p of G.prises) syncCrate(p, p.kind);
   for (const c of G.chests || []) syncChest(c);
   /* le corsaire : son pavillon sur les ports qu'il a pris */
-  if (G.game === 'arcade' && G.arc && G.arc.variant === 'corsaire' && G.cors) for (const P of G.cors.ports) if (P.state === 'ours') syncPortFlag(P);
+  if (G.game === 'arcade' && G.arc && G.arc.variant === 'corsaire' && G.cors) { for (const P of G.cors.ports) if (P.state === 'ours') syncPortFlag(P); corsSync3D(); }
   for (const w of G.whirls) syncWhirl(w);
   for (const b of G.boats || []) syncLaunch(b);
+  /* les embarcations de l'image seule (échouées, à la remorque, de retour à bord) et les hommes à terre */
+  boatsFxStep(dt);
   for (const w of G.wrecks || []) syncWreck(w);
   for (const z of G.zones || []) syncZone(z, z.col);
   if (G.game === 'arcade') for (const b of G.beasts || []) syncBeast(b, dt);
@@ -1624,5 +1612,6 @@ function cloudPatchScene() {
 /* efface tout ce qui appartient à la partie précédente */
 function clear3D() {
   for (const m of [...R3.live]) disposeObj(m);
+  boatsClear();
   R3.extra.length = 0;
 }

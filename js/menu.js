@@ -23,9 +23,12 @@ function menuShow(screen, html, opts) {
   MENU.axis = opts.axis || 'v';
   MENU.onSel = opts.onSel || null;
   MENU.sel = clamp(opts.sel || 0, 0, Math.max(0, MENU.items.length - 1));
+  /* du doigt (touch.js) : un premier toucher choisit la ligne, dont on lit la description ; un second
+   * la valide. À la souris, comme toujours : on survole, on clique */
+  const touched = () => typeof touchRecent === 'function' && touchRecent();
   MENU.items.forEach((n, i) => {
-    n.addEventListener('mouseenter', () => menuSelect(i));
-    n.addEventListener('click', () => { menuSelect(i); menuActivate(); });
+    n.addEventListener('mouseenter', () => { if (!touched()) menuSelect(i); });
+    n.addEventListener('click', () => { if (touched() && MENU.sel !== i) { menuSelect(i); return; } menuSelect(i); menuActivate(); });
   });
   menuSelect(MENU.sel, true);
   showHud(false);
@@ -149,6 +152,7 @@ function showHelp(back) {
           ${row(`<kbd>P</kbd> <kbd>${T('k.esc')}</kbd>`, T('help.pause'))}
           ${row('<kbd>M</kbd>', T('help.mute'))}
           <p class="small">${T(cors ? 'help.small.c' : 'help.small')}</p>
+          ${typeof TOUCH !== 'undefined' && TOUCH.on ? `<p class="small touch-help">${T('help.touch')}</p>` : ''}
         </div>
         <div>
           <h3>${T('help.float')}</h3>
@@ -284,6 +288,7 @@ function corsaireMenu() {
   }
   const iNew = items.length;
   items.push([T('cor.new'), newDesc(), () => startCorsaire(false)]);
+  items.push([T('tuto.item'), T('tuto.item.d'), startCorsaireTuto]);
   const iDiff = items.length;
   const cycle = (s) => {
     d = (d + s + CORS_DIFF.length) % CORS_DIFF.length;
@@ -466,10 +471,11 @@ function pauseGame() {
   const resume = () => { menuHide(); hidePause(); clearInput(); G.mode = 'play'; showHud(true); Music.duck(false); };
   Music.duck(true);
   const cors = G.game === 'arcade' && G.arc.variant === 'corsaire';
-  const restart = cors ? () => startCorsaire(true) : G.game === 'arcade' ? () => startArcade(G.shipId, G.arc.level, G.arc.variant) : () => startStory(G.stageIdx, G.shipId);
-  const label = cors ? T('menu.corsaire') + ' · ' + T('cor.diff.' + corsD().id) + ' · ' + T('cor.res.sub', corsOwned(), CORS_PORTS) : G.game === 'arcade' ? T('menu.arcade') + ' · ' + T('hud.level') + ' ' + G.arc.level : T('hud.stage', G.stageIdx + 1, STAGES.length) + ' · ' + tx(G.stage.title);
+  const tuto = cors && G.cors && G.cors.tuto;
+  const restart = tuto ? startCorsaireTuto : cors ? () => startCorsaire(true) : G.game === 'arcade' ? () => startArcade(G.shipId, G.arc.level, G.arc.variant) : () => startStory(G.stageIdx, G.shipId);
+  const label = tuto ? T('tuto.title') : cors ? T('menu.corsaire') + ' · ' + T('cor.diff.' + corsD().id) + ' · ' + T('cor.res.sub', corsOwned(), CORS_PORTS) : G.game === 'arcade' ? T('menu.arcade') + ' · ' + T('hud.level') + ' ' + G.arc.level : T('hud.stage', G.stageIdx + 1, STAGES.length) + ' · ' + tx(G.stage.title);
   el('pause-veil').classList.remove('hidden');
-  const items = [[T('pause.resume'), resume], [T(cors ? 'pause.restart.k' : G.game === 'arcade' ? 'pause.restart.a' : 'pause.restart.s'), restart], [T('menu.help'), () => showHelp(pauseGame)], [T('menu.main'), showTitle]];
+  const items = [[T('pause.resume'), resume], [T(tuto ? 'tuto.again' : cors ? 'pause.restart.k' : G.game === 'arcade' ? 'pause.restart.a' : 'pause.restart.s'), restart], [T('menu.help'), () => showHelp(pauseGame)], [T('menu.main'), showTitle]];
   menuShow('pause', `
     <div class="pause-box">
       <div class="kicker">${label}</div>

@@ -207,6 +207,8 @@ function applyQuality() {
 function boot() {
   setLang(LANG);
   init3D();
+  /* un écran tactile (touch.js) : une image un peu allégée d'emblée */
+  if (typeof TOUCH !== 'undefined' && TOUCH.on) touchQuality();
   buildHud();
   applyStaticText();
   G.onResize = () => {

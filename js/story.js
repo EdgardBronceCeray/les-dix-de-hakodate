@@ -559,7 +559,10 @@ function beachStep(dt) {
   me.inv = Math.max(me.inv, 0.5);
   S.bar = { f: clamp(S.beachT / goal.evac, 0, 1), label: T('hud.evacbar'), kind: 'gold' };
   if (Math.random() < dt * 0.9) {
-    G.boats.push({ x: me.x + rndSym(me.len * 0.3), y: me.y + rndSym(me.wid * 0.5), h: Math.atan2(S.shoreAt[1] - me.y, S.shoreAt[0] - me.x), bob: rnd(TAU), r: 10, crew: true, noRing: true, to: S.shoreAt, sp: 30 });
+    /* le canot est amené le long du bord, du côté de la grève (les mêmes tirages qu'avant) */
+    const ox = rndSym(me.len * 0.3), oy = rndSym(me.wid * 0.5), bob = rnd(TAU);
+    const a = Math.atan2(S.shoreAt[1] - me.y, S.shoreAt[0] - me.x), bx = ox, by = (wrapA(a - me.h) >= 0 ? 1 : -1) * (me.wid * 0.5 + 6) + oy * 0.2;
+    G.boats.push({ x: me.x + bx * Math.cos(me.h) - by * Math.sin(me.h), y: me.y + bx * Math.sin(me.h) + by * Math.cos(me.h), h: a, bob, r: 10, crew: true, noRing: true, to: S.shoreAt, sp: 30 });
   }
   const e = goal.evac;
   if (S.beachT > e * 0.25 && !S.said.spike) { S.said.spike = 1; floatText(me.x, me.y - 95, T('st.beach.spike'), 'gold'); Snd.clang(0); }
@@ -793,6 +796,8 @@ const RULES = {
         for (let i = G.boats.length - 1; i >= 0; i--) {
           const b = G.boats[i];
           if (b.barque || b.crew || !hitsShip(me, b.x, b.y, b.r + 8)) continue;
+          /* elle passe à la remorque, en file derrière le navire (l'image seule) */
+          boatTow(b, me);
           G.boats.splice(i, 1);
           S.got++; S.towed++;
           /* chaque chaloupe en remorque freine un peu le navire */
@@ -883,7 +888,8 @@ function barqueMove(dt) {
     if (!G.mapLand(nx, ny) || b.crew) { b.x = nx; b.y = ny; }
     else b.h += dt * 2;
     b.bob += dt * 3;
-    if ((b.state === 'back' || b.crew) && dist(b.x, b.y, tgt[0], tgt[1]) < 26) G.boats.splice(i, 1);
+    /* à la grève : la partie l'oublie, l'image la garde (boats.js) */
+    if ((b.state === 'back' || b.crew) && dist(b.x, b.y, tgt[0], tgt[1]) < 26) { boatToFx(b, tgt); G.boats.splice(i, 1); }
   }
 }
 

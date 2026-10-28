@@ -215,6 +215,7 @@ const YARD = { open: false, P: null, t: 0, msg: '', ship: null, present: [], sho
 function yardOpen(P) {
   const me = G.me, C = G.cors;
   YARD.open = true; YARD.P = P; YARD.t = 0; YARD.msg = '';
+  if (G.cors.tuto) G.cors.tuto.yarded = true;
   G.mode = 'menu';
   /* la flotte au mouillage du chantier, l'étrave au large ; les charpentiers remettent tout en état,
    * on remplit les soutes, on touche le tribut */
@@ -396,7 +397,7 @@ function yardRender(sel) {
       <h2>${fleetName(s, true)} <span class="jp">${tx(H.name)}</span>${flagTag}</h2>
       <div class="yard-coins"><b>${fmt0(coins)}</b><span>${T('yard.coins')}</span>${YARD.msg ? `<em>${YARD.msg}</em>` : ''}</div>
       <nav class="yard-list${R.length > 16 ? ' dense' : ''}">${R.slice(0, last).map(row).join('')}</nav>
-      ${first ? `<p class="yard-first">${T('yard.first')}</p>` : ''}
+      ${G.cors.tuto ? `<p class="yard-first">${T('tuto.yard.msg')}</p>` : first ? `<p class="yard-first">${T('yard.first')}</p>` : ''}
       <div class="yard-go">${row(R[last], last)}</div>
       <div class="yard-era"><div class="kicker">${T('yard.era')}</div><p id="yard-era-t">${R[i0] ? R[i0].era : ''}</p></div>
     </div>

@@ -149,6 +149,21 @@ function corsPlace(p, hAt) {
     if (hAt(x, y)[1] >= 4) { p.sx = x; p.sy = y; break; }
   }
   p.outs = corsOutposts(p, CORS_OUTPOSTS[p.id] || 0, hAt);
+  /* la grève des chaloupes : depuis le mouillage, le rivage le plus proche de la ville, loin de la
+   * batterie et des forts avancés (on ne s'échoue pas au pied des murs) */
+  let best = null;
+  for (let k = 0; k < 72; k++) {
+    const a = k / 72 * TAU, c = Math.cos(a), sn = Math.sin(a);
+    for (let r = 16; r <= 560; r += 6) {
+      const x = p.lx + c * r, y = p.ly + sn * r;
+      if (hAt(x, y)[1] < 2) continue;
+      if (dist(x, y, p.bx, p.by) < 95 || p.outs.some((o) => dist(x, y, o.x, o.y) < 60)) break;
+      const sc = r + 0.6 * dist(x, y, p.cx, p.cy);
+      if (!best || sc < best.sc) best = { x, y, sc };
+      break;
+    }
+  }
+  p.gx = best ? best.x : p.sx; p.gy = best ? best.y : p.sy;
 }
 
 function corsNavGrid() {
@@ -262,6 +277,12 @@ function setCorsaireWorld() {
     CORS.placed = true;
     for (const p of CORS.sites) if (p.role !== 'home') corsPlace(p, R3.terrain.userData.heightAt);
   }
+  /* le château des villes à donjon : là où le village l'a bâti */
+  if (R3.terrain) for (const p of CORS.sites) {
+    if (!CORS_CASTLES[p.id] || p.castle) continue;
+    const v = R3.terrain.children.find((c) => c.userData && c.userData.castleAt && c.userData.lab && c.userData.lab.x === p.cx && c.userData.lab.y === p.cy);
+    if (v) p.castle = v.userData.castleAt.slice();
+  }
   if (R3.terrain && !R3.terrain.userData.forts) {
     R3.terrain.userData.forts = true;
     const hAt = R3.terrain.userData.heightAt;
@@ -335,6 +356,8 @@ function buildFort(P, hAt) {
   B.face([[0, H + 0.3, -3], [0, H + 0.3, 3], [16, -1, 3], [16, -1, -3]], vc('#a8977a'), [8, -20, 0]);
   /* des pins aux épaules, à l'abri du rempart */
   for (const [lx, lz] of [[2, 29], [2, -29], [-24, -25]]) { [x, z] = W(lx, lz); B.at(x, top, z, r() * TAU); vPine(B, r, 1.0, pal); }
+  /* les grandes villes : deux mortiers, au milieu du terre-plein, pointés haut vers la mer */
+  if (P.major) for (const lz of [11, -11]) { [x, z] = W(6, lz); fortMortar(g, x, top, z, ang); }
   /* le mât de signaux, où l'on hisse l'alarme */
   const mast = cyl(0.8, 1.1, 24, '#4a3a2a', 6);
   [x, z] = W(-22, 24); mast.position.set(x, top + 12, z); g.add(mast);
@@ -342,6 +365,21 @@ function buildFort(P, hAt) {
   g.add(mesh);
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return mergeStatic(g);
+}
+
+/* un mortier sur son affût de bois : un fût court et gros, pointé à quarante-cinq degrés */
+function fortMortar(g, x, y, z, ang) {
+  const iron = stdMat('#1d1d20', 0.45, 0.6), wood = stdMat('#4a3a2a', 0.85);
+  const bed = new THREE.Mesh(new THREE.BoxGeometry(6.4, 1.8, 5.2), wood);
+  bed.position.set(x, y + 0.9, z); bed.rotation.y = -ang; bed.castShadow = true; g.add(bed);
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(1.75, 2.1, 4.8, 14), iron);
+  tube.rotation.set(0, -ang, -Math.PI / 4);
+  tube.position.set(x + Math.cos(ang) * 0.9, y + 3.4, z + Math.sin(ang) * 0.9);
+  tube.castShadow = true; g.add(tube);
+  const bore = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.05, 0.2, 12), stdMat('#050505', 0.9));
+  bore.rotation.copy(tube.rotation);
+  bore.position.set(x + Math.cos(ang) * 2.6, y + 5.1, z + Math.sin(ang) * 2.6);
+  g.add(bore);
 }
 
 /* un fort avancé : un petit pentagone sur sa pointe, deux pièces, un corps de garde */
@@ -428,6 +466,47 @@ const CORS_TYPES = [
   { id: 'kotetsu', w: 1, from: 7, value: 200, crew: 2.6 },
 ];
 const corsType = (id) => CORS_TYPES.find((t) => t.id === id) || CORS_TYPES[1];
+
+/* ---------- les navires de l'ordinateur, à leur taille ----------
+ * Leur coque vient de leurs dimensions, comme au chantier (4,4 × (L × B)^0,65 : la frégate de 66 m y
+ * a 330 points, le Kasuga de 74 m en a 295 ; le Kōtetsu, tout de fer, une fois et demie de plus) ;
+ * leur bordée vient de leur armement (data.js), pièce par pièce : chacune tire quand elle porte, et
+ * frappe selon son calibre (le canon de 12 du corsaire, au premier cran : 10). Au début de la
+ * traversée, ils sortent à court d'hommes et de poudre ; ils prennent toute leur force à mesure que
+ * la menace monte (span : en tant de points de menace). À pleine force, ils gardent un peu moins de
+ * coque que leur taille ne le voudrait (84 %), et leurs coups (dmg, sur chaque boulet) restent
+ * moins lourds que les vôtres : vous menez un seul navire, eux sont légion. */
+const CORS_GUN = {
+  p12: [10, 390], p18: [11, 400], p24: [12, 410], p30: [13, 410], p68: [17, 430], how: [9, 340],
+  r40: [14, 450], r50: [15, 460], a70: [17, 470], a6: [6, 380], a300: [40, 470],
+};
+const CORS_FOE = { hull: [0.44, 0.84], dmg: [0.14, 0.36], span: 6, rate: [2, 3.2], aim: 0.09, flee: 0.3 };
+const corsRamp = (thr) => clamp((thr - 1) / CORS_FOE.span, 0, 1);
+const corsHullOf = (sp) => 4.4 * Math.pow(sp.L * sp.B, 0.65) * (sp.id === 'kotetsu' ? 1.6 : 1);
+/* leur manière de se battre : la distance qu'ils tiennent, et leur goût pour l'enfilade (passer
+ * devant l'étrave ou derrière la poupe de leur cible) ; le Kōtetsu éperonne */
+const CORS_DOCTRINE = { moshun: { range: 320, rake: 0.3 }, kasuga: { range: 290, rake: 0.5 }, choyo: { range: 240, rake: 0.7 }, kotetsu: { range: 200, rake: 0, ram: true } };
+/* les pièces d'un navire, d'après son armement : où elles sont, de quel côté elles portent */
+function corsGunsOf(sp) {
+  if (sp._cg) return sp._cg;
+  const out = [];
+  for (const a of sp.armament || []) {
+    const n = a.n || 1, g = CORS_GUN[a.type] || CORS_GUN.p24;
+    for (let i = 0; i < n; i++) {
+      const gun = { dmg: g[0], range: g[1] };
+      if (a.mount === 'broad') {
+        const per = Math.max(1, Math.ceil(n / 2)), k = i >> 1;
+        Object.assign(gun, { arc: 'side', side: i % 2 ? 1 : -1, x: (a.x || 0) + (per > 1 ? (k / (per - 1) - 0.5) * (a.span || 0.4) : 0) });
+      } else if (a.mount === 'pivot') Object.assign(gun, { arc: 'pivot', x: (a.x || 0) + (i - (n - 1) / 2) * 0.1 });
+      else if (a.mount === 'casemate' || a.mount === 'bow') Object.assign(gun, { arc: 'bow', wide: a.mount === 'bow' ? 0.45 : 1.1, x: a.x || 0.4 });
+      else if (a.mount === 'aftcasemate' || a.mount === 'stern') Object.assign(gun, { arc: 'stern', wide: a.mount === 'stern' ? 0.45 : 1.1, x: a.x || -0.4 });
+      else continue;
+      out.push(gun);
+    }
+  }
+  sp._cg = out;
+  return out;
+}
 /* les grands ports : batteries plus fortes, magasins plus riches, tribut plus gros (les cinq
  * villes à arsenal en sont, voir fleet.js) */
 const CORS_MAJOR = ['shinagawa', 'uraga', 'hyogo', 'nagasaki', 'kagoshima', 'shimonoseki', 'niigata', 'kanazawa', 'hiroshima'];
@@ -472,7 +551,7 @@ function corsVoyage() { const v = arcadeLoad('corsaire').voyage; return v && v.v
 /* on enregistre au chantier, et quand on prend un port : c'est là qu'on reprendra si l'on coule */
 function corsaireSave() {
   const C = G.cors, me = G.me;
-  if (!C || !me || !me.cfg) return;
+  if (!C || !me || !me.cfg || C.tuto) return;
   const owned = {};
   for (const P of C.ports) if (P.state === 'ours' && P.role !== 'home') owned[P.id] = P.fort;
   arcadeSave('corsaire', { voyage: Object.assign({ v: 2, diff: C.diff || 0, cfg: Object.assign({}, me.cfg), coins: Math.floor(C.coins), spent: C.spent, owned, last: C.lastPort, stats: Object.assign({}, C.stats), score: G.score, tribute: C.tribute, won: !!C.won }, fleetSave()) });
@@ -480,7 +559,7 @@ function corsaireSave() {
 /* un port perdu l'est aussi dans la traversée enregistrée */
 function corsSavePorts() {
   const v = corsVoyage();
-  if (!v) return;
+  if (!v || G.cors.tuto) return;
   const owned = {};
   for (const P of G.cors.ports) if (P.state === 'ours' && P.role !== 'home') owned[P.id] = P.fort;
   v.owned = owned;
@@ -500,11 +579,11 @@ function startCorsaire(resume, diff) {
   });
 }
 
-function corsaireBegin(save, pick) {
+function corsaireBegin(save, pick, tuto) {
   G.game = 'arcade'; G.shipId = 'corsaire';
   G.score = save ? save.score || 0 : 0;
   const diff = save ? clamp(save.diff | 0, 0, CORS_DIFF.length - 1) : pick !== undefined ? clamp(pick | 0, 0, CORS_DIFF.length - 1) : corsDiffPick();
-  if (!save && diff !== corsDiffPick()) arcadeSave('corsaire', { diff });
+  if (!save && !tuto && diff !== corsDiffPick()) arcadeSave('corsaire', { diff });
   G.best = corsRecord(diff).best;
   RNG = makeRng(G.testSeed || ((Date.now() % 100000) + 1869));
   W.drift = [0, 0];
@@ -528,7 +607,7 @@ function corsaireBegin(save, pick) {
     spawnT: 3, huntSaid: -99, aiN: 0, chestT: 3, brulotT: 70, ambT: 240, ambI: 0, siegeT: 210, siege: null, board: null, musicT: 0, debrisT: 0,
     lastPort: save ? save.last : 'hakodate', here: null, repT: 0, tips: {},
     won: !!(save && save.won), winT: 0, seen: {}, seenT: 0,
-    fleet: [], sinking: [], trail: [], bought: Object.assign({}, save && save.bought), landing: null, crowd: 4,
+    fleet: [], sinking: [], trail: [], bought: Object.assign({}, save && save.bought), landing: null, crowd: 4, shells: [], tuto: tuto ? { i: -1 } : null,
   };
   const C = G.cors;
   C.home = C.ports.find((p) => p.role === 'home');
@@ -595,7 +674,7 @@ function corsScale() {
     P.owner.dmgMe = dmgMe;
     /* une batterie tient longtemps : il faut s'y reprendre à plusieurs bordées ; au moyen et au
      * difficile, au moins batV (batVM pour une grande ville), si forte que soit votre artillerie */
-    const m = Math.max(Math.round((P.major ? 220 + 50 * C.threat : 100 + 30 * C.threat) * 1.6 * D.battery), Math.floor(volley * (P.major ? D.batVM : D.batV)));
+    const m = Math.round(Math.max(Math.round((P.major ? 220 + 50 * C.threat : 100 + 30 * C.threat) * 1.6 * D.battery), Math.floor(volley * (P.major ? D.batVM : D.batV))) * (C.tuto ? 0.35 : 1));
     if (P.state === 'enemy') P.hp = P.hpMax ? P.hp * m / P.hpMax : m;
     P.hpMax = m;
     const om = Math.round(m * 0.45);
@@ -746,6 +825,29 @@ function syncChest(c) {
   ring.material.opacity = (0.26 + pulse * 0.26) * (sink ? 1 - sink : 1);
 }
 
+/* les bombes de mortier en l'air, et le cercle rouge, qui se resserre, où elles tomberont */
+function corsSync3D() {
+  for (const b of G.cors.shells) {
+    const m = keep(b, () => {
+      const g = new THREE.Group();
+      const ball = new THREE.Mesh(BSPH(), stdMat('#151515', 0.4, 0.6));
+      ball.userData.sharedGeo = true; ball.scale.setScalar(3.6); ball.castShadow = true;
+      g.add(ball);
+      const ring = glowRing(new THREE.Color(1.9, 0.32, 0.18), 60);
+      R3.scene.add(ring);
+      g.userData.ring = ring;
+      return g;
+    });
+    const k = clamp(b.t / b.T, 0, 1);
+    m.position.set(lerp(b.x0, b.x, k), 8 + 4 * b.apex * k * (1 - k), lerp(b.y0, b.y, k));
+    const ring = m.userData.ring;
+    ring.position.set(b.x, 1, b.y);
+    ring.scale.setScalar(b.r * (4.4 - 2.4 * k));
+    ring.material.opacity = 0.3 + 0.55 * k * (0.65 + 0.35 * Math.sin(W.t * (8 + 22 * k)));
+    if (Math.random() < 0.6) fx.push({ k: 'smoke', x: m.position.x, y: m.position.z, z0: m.position.y, vx: 0, vy: 0, r: 2.2, grow: 5, life: 1.3, age: 0, a: 0.3, tone: 2, air: true });
+  }
+}
+
 /* le pavillon du corsaire, hissé sur les ports qu'on a pris (et sur Hakodate) */
 function syncPortFlag(P) {
   if (P._m && !R3.live.has(P._m)) P._m = null;
@@ -781,6 +883,7 @@ function corsaireTick(dt) {
   const me = G.me, A = G.arc, C = G.cors;
   A.t += dt; C.t += dt;
   const alive = A.state === 'play' && !me.sinking;
+  if (C.tuto) tutoStep(dt);
   C.scaleT -= dt;
   if (C.scaleT <= 0) { C.scaleT = 1; corsScale(); }
   /* Espace tire toujours, même bord à bord : l'abordage se frappe sur Entrée */
@@ -954,9 +1057,9 @@ function corsBoardStep(dt) {
     best.throttle = Math.min(best.throttle, 0.1);
     /* la mousqueterie de son équipage, par-dessus les bastingages */
     if (me.inv <= 0) {
-      me.hull -= 0.7 * corsType(best.spec.id).crew * (me.spec.armor || 1) * corsD().dmg * dt;
+      me.hull -= 0.7 * corsType(best.spec.id).crew * (me.spec.armor || 1) * corsD().dmg * (me.dmgK || 1) * dt;
       me.hitT = Math.max(me.hitT, 0.06);
-      if (me.hull <= 0) { me.hull = 0; sinkShip(me); return; }
+      if (me.hull <= 0) { if (me.noSink) me.hull = 1; else { me.hull = 0; sinkShip(me); return; } }
     }
     if (Math.random() < dt * 7) {
       const t = Math.random(), x = lerp(me.x, best.x, t) + rndSym(10), y = lerp(me.y, best.y, t) + rndSym(10);
@@ -990,11 +1093,11 @@ function corsAground(s, v0, hx, hy, fort, head) {
   fx.splash(hx, hy, 0.6 + r);
   Snd.thud(Math.min(1.2, 0.3 + r));
   G.shake = Math.min(1.4, (G.shake || 0) + 0.25 + r);
-  if (r >= CORS_WRECK) { corsWreck(s, fort); return; }
-  const d = s.hullMax * (0.05 + 0.6 * (r - 0.15));
+  if (r >= CORS_WRECK && !s.noSink) { corsWreck(s, fort); return; }
+  const d = s.hullMax * (0.05 + 0.6 * (Math.min(r, CORS_WRECK) - 0.15)) * (s.dmgK || 1);
   s.hull -= d; s.hitT = 0.25;
   floatText(s.x, s.y - 30, T('cor.ground', Math.round(d)), 'bad');
-  if (s.hull <= 0) { corsWreck(s, fort); return; }
+  if (s.hull <= 0) { if (s.noSink) s.hull = 1; else { corsWreck(s, fort); return; } }
   if (!G.cors.tips.ground) { G.cors.tips.ground = true; showHint(T('cor.tip.ground')); }
 }
 
@@ -1090,32 +1193,50 @@ function corsLanding(dt) {
   const help = fleetFollowers().filter((s) => dist(s.x, s.y, P.lx, P.ly) < R * 2.6 && Math.abs(s.v) < 60);
   const dur = 16 * (P.major ? 1.4 : 1) / ((1 + 0.2 * (cfg.chaloupes || 0)) * (1 + 0.06 * cfg.abordeurs) * (1 + 0.15 * Math.min(3, help.length)));
   L.f += dt / dur;
+  /* les embarcations vont et viennent entre le bord et la grève (boats.js) : l'image seule */
   L.boatT -= dt;
   if (L.boatT <= 0) {
-    L.boatT = rnd(1.5, 0.9);
+    L.boatT = 0.8;
     corsBoat(me, P);
-    for (const s of help) if (Math.random() < 0.6) corsBoat(s, P);
+    for (const s of help) corsBoat(s, P);
   }
   if (L.f >= 1) { C.landing = null; corsTake(P); }
 }
 
-/* une chaloupe pleine d'hommes part du navire et rame vers la grève */
+/* combien d'embarcations un navire met à l'eau : celles de sa coque et ses chaloupes (le chantier),
+ * de une à quatre */
+function corsBoatsOf(s) {
+  const c = s.cfg;
+  if (!c) return 2;
+  return clamp(Math.min([1, 2, 3, 4, 6, 6][c.coque], [0, 0, 2, 2, 2, 4][c.coque] + (c.chaloupes || 0)), 1, 4);
+}
+
+/* on amène une embarcation le long du bord, du côté de la grève ; elle y portera ses hommes */
 function corsBoat(s, P) {
-  const a = Math.atan2(P.sy - s.y, P.sx - s.x), side = Math.random() < 0.5 ? 1 : -1;
-  const x = s.x + Math.cos(a) * s.wid * 0.7 + Math.cos(s.h) * rndSym(s.len * 0.25), y = s.y + Math.sin(a) * s.wid * 0.7 + Math.sin(s.h) * rndSym(s.len * 0.25);
-  G.boats.push({ x, y, h: a + side * 0.3, bob: rnd(TAU), r: 10, crew: true, noRing: true, noMini: true, to: [P.sx + rndSym(40), P.sy + rndSym(40)], sp: rnd(44, 34), life: 30 });
+  const mine = G.boats.filter((b) => b.mother === s);
+  if (mine.length >= corsBoatsOf(s)) return;
+  let slot = 0;
+  while (mine.some((b) => b.slot === slot)) slot++;
+  const gx = P.gx !== undefined ? P.gx : P.sx, gy = P.gy !== undefined ? P.gy : P.sy;
+  const a = Math.atan2(gy - s.y, gx - s.x), side = wrapA(a - s.h) >= 0 ? 1 : -1;
+  /* chacune vise sa part de la grève, de part et d'autre du milieu */
+  const off = (slot % 2 ? 1 : -1) * (6 + 13 * Math.ceil(slot / 2)) + (Math.random() - 0.5) * 8;
+  const b = { kind: s.spec.L < 36 ? 'canot' : 'chaloupe', load: 'troops', flag: true, mother: s, P, side, slot, state: 'lower', t: 0, h: s.h, bob: Math.random() * TAU,
+    sp: 36 + Math.random() * 8, crew: true, noRing: true, noMini: true, to: [gx - Math.sin(a) * off, gy + Math.cos(a) * off], town: [P.cx, P.cy] };
+  [b.x, b.y] = boatStation(b);
+  G.boats.push(b);
   if (s === G.me) Snd.splash(0);
 }
 
 function corsBoatsStep(dt) {
+  const L = G.cors.landing;
   for (let i = G.boats.length - 1; i >= 0; i--) {
     const b = G.boats[i];
-    if (!b.to) continue;
-    const want = Math.atan2(b.to[1] - b.y, b.to[0] - b.x);
-    b.h += clamp(wrapA(want - b.h), -dt * 1.5, dt * 1.5);
-    b.x += Math.cos(b.h) * b.sp * dt; b.y += Math.sin(b.h) * b.sp * dt;
-    b.bob += dt * 3; b.life -= dt;
-    if (dist(b.x, b.y, b.to[0], b.to[1]) < 22 || b.life <= 0) G.boats.splice(i, 1);
+    if (!b.mother) continue;
+    /* le débarquement interrompu ou fini : celles qu'on amenait remontent à bord */
+    if (b.state === 'lower' && !(L && L.P === b.P && !L.why)) { b.state = 'hoist'; b.t = BOAT_HOIST * (1 - clamp(b.t / BOAT_LOWER, 0, 1)); }
+    boatLife(b, dt);
+    if (b.done) G.boats.splice(i, 1);
   }
 }
 
@@ -1136,8 +1257,9 @@ function corsCapture(s) {
   Snd.levelUp();
 }
 
-/* ce que vaut la cale d'un navire de l'ordinateur */
-function corsValue(s) { return corsType(s.spec.id).value * (1 + 0.15 * (s.up.voilure + s.up.coque + s.up.canons)); }
+/* ce que vaut la cale d'un navire de l'ordinateur : plus dur à vaincre qu'avant la version 6
+ * (deuxième mise à jour), il rapporte d'autant plus */
+function corsValue(s) { return corsType(s.spec.id).value * (1 + 0.15 * (s.up.voilure + s.up.coque + s.up.canons)) * (0.4 + 0.6 * (s.toughF || 1)); }
 
 /* ---------- les chocs : l'éperon ---------- */
 
@@ -1177,7 +1299,7 @@ function corsContacts() {
          * navire plus lourd que l'autre n'en tire qu'un avantage borné */
         const k2 = (Math.min(close, 160) / 100) ** 2;
         const cu = cfg.cuirasse, mMe = corsMass(me), mO = corsMass(o);
-        const hitO = 7 * k2 * (1 + 0.15 * Math.min(5, cu) + 0.06 * Math.max(0, cu - 5)) * (me.spec.ramK || 1) * Math.min(1.4, Math.sqrt(mMe / mO));
+        const hitO = 7 * k2 * (1 + 0.15 * Math.min(5, cu) + 0.06 * Math.max(0, cu - 5)) * (me.spec.ramK || 1) * Math.min(1.4, Math.sqrt(mMe / mO)) * Math.pow(o.toughF || 1, 0.75);
         const hitMe = 5 * k2 * (cfg.eperon ? 0.35 / (1 + 0.25 * (cfg.eperon - 1)) : 1) * Math.sqrt(mO / mMe);
         me.ramArm = 0;
         o.lastRam = W.t; o.cors && (o.cors.hitMe = W.t);
@@ -1367,12 +1489,17 @@ function corsSpawn(at, armed) {
   s.cors = { state: 'patrol', dest: null, path: [], pi: 0, waitT: rnd(6, 1), alertT: 0, lostT: 0, repath: 0, gainT: rnd(110, 80) * D.gain, n: ++C.aiN, cargo: 0, dir: Math.random() < 0.5 ? 1 : -1, hitMe: -99 };
   /* le Kōtetsu reste redoutable, mais sa cuirasse ne le rend plus invulnérable */
   if (id === 'kotetsu') { s.armor = 0.35; s.heavy = true; }
-  s.hullK = (id === 'kotetsu' ? 0.35 : 0.75) * D.hull;
+  s.cors.thr = C.threat;
   s.up = { voilure: 0, coque: 0, canons: 0 };
-  const start = Math.min(15, Math.floor(0.6 * (C.threat - 1)) + D.start);
+  const start = Math.min(15, Math.floor(0.45 * (C.threat - 1)) + D.start);
   for (let i = 0; i < start; i++) corsGain(s, null, true);
   corsSetHull(s, true);
   s.dmgMe = Math.min(1.8, 1 + 0.05 * (C.threat - 1)) * D.dmg;
+  /* ses boulets : selon le calibre de chaque pièce, et l'état de ses équipages */
+  s.kE = (CORS_FOE.dmg[0] + (CORS_FOE.dmg[1] - CORS_FOE.dmg[0]) * corsRamp(C.threat)) * D.dmg;
+  /* sa manière : en ligne de bataille, ou à la recherche de l'enfilade */
+  const doc = CORS_DOCTRINE[id];
+  s.cors.rake = !!doc && rnd() < doc.rake;
   s.throttle = 0.4;
   G.ships.push(s);
   return s;
@@ -1395,9 +1522,14 @@ function corsSpawnGroup(room) {
 }
 
 function corsSetHull(s, full) {
-  const m = Math.round(s.spec.hull * (s.hullK || 1) * (1 + 0.2 * upEff(s.up.coque)));
+  const D = corsD(), thr = s.cors && s.cors.thr !== undefined ? s.cors.thr : G.cors.threat;
+  const k = CORS_FOE.hull[0] + (CORS_FOE.hull[1] - CORS_FOE.hull[0]) * corsRamp(thr);
+  const m = Math.round(corsHullOf(s.spec) * k * D.hull * (1 + 0.12 * upEff(s.up.coque)));
   if (full) s.hull = m; else s.hull = Math.min(m, s.hull + (m - (s.hullMax || m)));
   s.hullMax = m;
+  /* ce qu'il encaisse de plus qu'avant la version 6 (deuxième mise à jour) : l'éperon et vos forts,
+   * qui frappent d'un nombre fixe, s'y règlent */
+  s.toughF = m / (s.spec.hull * (s.spec.id === 'kotetsu' ? 0.35 : 0.75) * D.hull * (1 + 0.2 * upEff(s.up.coque)));
 }
 
 /* un cran de plus pour un navire de l'ordinateur : plus de voiles, de coque ou de canons */
@@ -1413,7 +1545,7 @@ function corsGain(s, kind, quiet) {
 function corsHunt(s, alert) {
   const C = s.cors;
   if (alert) C.alertT = Math.max(C.alertT, alert);
-  if (C.state === 'hunt' || C.state === 'prize') return;
+  if (C.state === 'hunt' || C.state === 'prize' || C.state === 'repair' || C.state === 'tuto') return;
   if (!corsArmed(s)) { C.state = 'flee'; return; }
   C.state = 'hunt'; C.lostT = 0; C.repath = 0;
   s.ai.side = 0; s.ai.fireT = Math.max(s.ai.fireT, rnd(2, 1));
@@ -1447,7 +1579,7 @@ function corsAlarm(P) {
     if (dist(s.x, s.y, P.hx, P.hy) < 5000) { corsHunt(s, 60); n++; }
   }
   /* personne aux environs : le port arme un navire de garde */
-  if (n === 0) { const s = corsSpawn(P, true); if (s) { s.cors.waitT = 0; corsHunt(s, 60); } }
+  if (n === 0 && !G.cors.tuto) { const s = corsSpawn(P, true); if (s) { s.cors.waitT = 0; corsHunt(s, 60); } }
   /* et il appelle à l'aide : une escadre de secours part du port ennemi voisin */
   if (W.t > (P.reliefT || 0)) { P.reliefT = W.t + 240; corsRelief(P, 0); }
 }
@@ -1457,15 +1589,19 @@ function corsAlarm(P) {
  * seconde (wave 1), quand la batterie tombe, compte un navire de moins. */
 function corsRelief(P, wave) {
   const C = G.cors, me = G.me;
-  const n = clamp(1 + Math.floor((C.threat - 1) / 2.5), 1, 5) + (P.major ? 1 : 0) - wave + corsD().relief;
+  /* des navires à leur taille : moins nombreux qu'avant la version 6 (deuxième mise à jour), mais
+   * chacun pèse deux fois plus */
+  const n = clamp(Math.floor((C.threat - 1) / 3), 1, 5) + (P.major ? 1 : 0) - wave + corsD().relief;
   if (n <= 0) return;
   const from = C.ports.filter((q) => q !== P && q.state === 'enemy' && dist(q.hx, q.hy, P.hx, P.hy) > 2600 && dist(q.hx, q.hy, me.x, me.y) > cam.w)
     .sort((a, b) => dist(a.hx, a.hy, P.hx, P.hy) - dist(b.hx, b.hy, P.hx, P.hy))[0];
-  let k = 0;
+  let k = 0, lead = null;
   for (let i = 0; i < n; i++) {
     const s = corsSpawn(from, true);
     if (!s) break;
     s.cors.relief = P; s.cors.waitT = 0;
+    /* l'escadre de secours vient en ligne de file, derrière le premier navire */
+    if (lead) { s.cors.lead = lead; s.cors.slot = i; } else lead = s;
     corsHunt(s, 150);
     k++;
   }
@@ -1598,7 +1734,7 @@ function corsAI(s, dt) {
   if (C.gainT <= 0) { C.gainT = rnd(130, 90) * corsD().gain; corsGain(s, null, false); }
   /* il vous voit : un navire armé vous prend en chasse (si vous valez un boulet), un transport s'enfuit ;
    * une escadre de siège ne lâche sa proie que si vous venez sur elle (ou si vous tirez sur l'un des siens) */
-  if (C.state !== 'hunt' && !safe) {
+  if (C.state !== 'hunt' && C.state !== 'repair' && C.state !== 'tuto' && !safe) {
     if (corsArmed(s)) { if (C.state === 'siege' ? d < 520 : (K.sight && d < K.sight) || (C.alertT > 0 && d < 3500)) corsHunt(s, 0); }
     else if (d < 520 && C.state !== 'flee') C.state = 'flee';
   }
@@ -1606,7 +1742,7 @@ function corsAI(s, dt) {
    * (corsD().chase), sans dépasser chaseCap fois la sienne ; la chasse finie, il reprend son pas */
   {
     const D = corsD(), own = maxSpeed(s) / (s.paceK || 1);
-    const want = C.state === 'hunt' && !safe && own > 0 ? clamp(D.chase * maxSpeed(me) / (me.boostK || 1) / own, 1, D.chaseCap) : 1;
+    const want = C.state === 'hunt' && !safe && own > 0 && d > 650 ? clamp(D.chase * maxSpeed(me) / (me.boostK || 1) / own, 1, D.chaseCap) : 1;
     s.paceK = lerp(s.paceK || 1, want, clamp(dt * 0.6, 0, 1));
   }
   /* il repêche les coffres qui flottent près de lui : vous retrouverez cet or dans sa cale */
@@ -1633,10 +1769,13 @@ function corsAI(s, dt) {
       else if (d > 2300 && C.alertT <= 0) C.lostT += dt;
       else C.lostT = Math.max(0, C.lostT - dt);
       if (C.lostT > 9) { corsEndHunt(s); break; }
+      /* touché à mort, il rompt le combat et va se faire réparer au port ennemi le plus proche (une
+       * fois ; la deuxième, il se bat jusqu'au bout) */
+      if (corsArmed(s) && s.hull < s.hullMax * CORS_FOE.flee && !C.siegeOf && !C.mended && corsRetreat(s)) break;
       const clearShot = d < 1500 && corsLos(s.x, s.y, me.x, me.y, 55);
       if (clearShot) {
         s.ai.sight = 1e9; s.ai.weigh = true; s.ai.anchored = false;
-        aiStep(s, dt, !safe, !safe);
+        corsCombat(s, dt, me, safe);
       } else {
         /* la côte entre vous : il contourne par les chenaux */
         C.repath -= dt;
@@ -1657,9 +1796,14 @@ function corsAI(s, dt) {
       break;
     }
     case 'siege': corsSiegeAI(s, dt); break;
+    case 'repair': corsRepairAI(s, dt, me, d); break;
+    /* le didacticiel : la proie tourne en rond, à petite allure */
+    case 'tuto': corsSteer(s, dt, s.x + Math.cos(s.h + 0.16) * 300, s.y + Math.sin(s.h + 0.16) * 300, 0.3); break;
     default: {
-      /* en escadre : dans le sillage du chef de file, tant qu'il fait route */
+      /* en escadre : dans le sillage du chef de file, tant qu'il fait route ; s'il vous prend en
+       * chasse, l'escadre le suit au combat, toujours en ligne */
       const L = C.lead;
+      if (L && G.ships.includes(L) && !L.sinking && !L.captured && L.cors.state === 'hunt' && corsArmed(s)) { corsHunt(s, 30); break; }
       if (L && (!G.ships.includes(L) || L.sinking || L.captured || L.cors.state !== 'patrol')) C.lead = null;
       else if (L) {
         if (L.cors.waitT > 0) { s.throttle = lerp(s.throttle, 0, clamp(dt, 0, 1)); steerShip(s, dt, false, false, false, false); break; }
@@ -1690,6 +1834,145 @@ function corsAI(s, dt) {
   moveOnMap(s, dt);
 }
 
+/* ---------- le combat d'un navire de l'ordinateur ----------
+ * Chacun selon sa manière (CORS_DOCTRINE) : il tient la distance de ses pièces, et soit il se bat
+ * par le travers, en tournant autour de sa cible, soit il cherche l'enfilade : la place devant
+ * l'étrave ou derrière la poupe de sa cible, d'où sa bordée la prend dans toute sa longueur. Le
+ * Kōtetsu fonce l'étrave en avant, son canon de 300 livres pointé par les sabords de l'avant. En
+ * escadre, les navires restent dans le sillage du chef de file, et leurs bordées partent l'une
+ * après l'autre en passant. */
+function corsCombat(s, dt, me, safe) {
+  const A = s.ai, C = s.cors, doc = CORS_DOCTRINE[s.spec.id] || CORS_DOCTRINE.choyo;
+  const d = dist(s.x, s.y, me.x, me.y), toMe = Math.atan2(me.y - s.y, me.x - s.x), side = wrapA(toMe - s.h) > 0 ? 1 : -1;
+  let tx, ty, thr;
+  /* en ligne de file derrière son chef de file, tant qu'il se bat et qu'il n'est pas trop loin */
+  const L = C.lead;
+  if (L && (!G.ships.includes(L) || L.sinking || L.captured || L.cors.state !== 'hunt' || s.hull < s.hullMax * 0.5 || (d < 220 && dist(s.x, s.y, L.x, L.y) > 700))) C.lead = null;
+  C.passT = (C.passT || 0) - dt;
+  if (C.lead) {
+    const gap = C.slot * ((L.len + s.len) / 2 + 60);
+    tx = L.x - Math.cos(L.h) * gap; ty = L.y - Math.sin(L.h) * gap;
+    thr = clamp(L.throttle + (dist(s.x, s.y, tx, ty) > gap * 0.4 ? 0.3 : 0), 0.3, 1);
+  } else if (doc.ram) {
+    /* droit sur lui, en visant où il sera */
+    const lt = Math.min(1.6, d / Math.max(80, maxSpeed(s)));
+    tx = me.x + me.vx * lt; ty = me.y + me.vy * lt; thr = 1;
+  } else {
+    const R = doc.range, c = Math.cos(me.h), n = Math.sin(me.h);
+    /* sa place par rapport à la cible : en avant (+) ou en arrière, à droite (+) ou à gauche de son axe */
+    const fx_ = (s.x - me.x) * c + (s.y - me.y) * n, fy = -(s.x - me.x) * n + (s.y - me.y) * c;
+    /* la passe d'enfilade : déjà vers l'avant ou l'arrière de sa cible, il coupe son axe à bonne
+     * distance, toute sa bordée dehors, puis reprend le combat par le travers */
+    if (C.pass && (Math.sign(fy) !== C.pass.side || C.pass.t < 0)) { C.pass = null; C.passT = rnd(14, 8); }
+    if (!C.pass && C.rake && C.passT <= 0 && d < R + 260 && Math.abs(fx_) > Math.abs(fy) * 0.9) C.pass = { end: fx_ > 0 ? 1 : -1, side: Math.sign(fy) || 1, t: 9 };
+    if (C.pass) {
+      C.pass.t -= dt;
+      const ax = me.x + c * R * C.pass.end + me.vx * 0.5, ay = me.y + n * R * C.pass.end + me.vy * 0.5;
+      tx = ax + n * C.pass.side * 260; ty = ay - c * C.pass.side * 260;
+      tx = ax - (tx - ax); ty = ay - (ty - ay);
+      thr = 0.95;
+    } else if (d > R + 150) {
+      /* il approche, de biais, pour arriver par le travers */
+      const want = toMe - side * 0.35;
+      tx = s.x + Math.cos(want) * 200; ty = s.y + Math.sin(want) * 200; thr = 0.95;
+    } else {
+      /* par le travers : il tourne autour de sa cible, en se rapprochant ou en s'éloignant */
+      const off = d > R + 50 ? Math.PI / 2 - 0.5 : d < R - 60 ? Math.PI / 2 + 0.5 : Math.PI / 2;
+      const want = toMe - side * off;
+      tx = s.x + Math.cos(want) * 200; ty = s.y + Math.sin(want) * 200;
+      thr = d > R + 50 ? 0.85 : 0.6;
+    }
+  }
+  /* trop près : il s'écarte (on ne l'aborde pas si facilement) */
+  if (!doc.ram && d < 130 && !C.lead) { const away = toMe + Math.PI - side * 0.8; tx = s.x + Math.cos(away) * 200; ty = s.y + Math.sin(away) * 200; thr = 1; }
+  corsSteer(s, dt, tx, ty, thr);
+  if (safe) return;
+  if (s.spec.gatling && d < 270) gatling(s, me.x + me.vx * 0.2, me.y + me.vy * 0.2, dt);
+  A.fireT -= dt;
+  if (A.fireT <= 0 && d < 480 && corsFire(s, me)) A.fireT = rnd(CORS_FOE.rate[1], CORS_FOE.rate[0]) * (A.slow || 1) * coolUp(s.up ? s.up.canons : 0);
+}
+
+/* les pièces qui portent tirent ; renvoie combien ont tiré. Comme les vôtres, celles de la bordée
+ * partent droit par le travers ; celles à pivot et celles de chasse se pointent sur la cible, là où
+ * elle est (sans la viser en avant) */
+function corsFire(s, t) {
+  const d = dist(s.x, s.y, t.x, t.y), rel = wrapA(Math.atan2(t.y - s.y, t.x - s.x) - s.h), side = rel > 0 ? 1 : -1, ar = Math.abs(rel);
+  const abeam = Math.abs(ar - Math.PI / 2) < 0.38;
+  const bears = (g) => (g.arc === 'side' ? abeam && g.side === side : g.arc === 'pivot' ? ar > 0.35 && ar < 2.3 : g.arc === 'bow' ? ar < g.wide : ar > Math.PI - g.wide);
+  const list = corsGunsOf(s.spec).filter((g) => bears(g) && d < g.range);
+  /* ses crans de canons : une pièce de plus par bord tous les trois crans, et des pièces de chasse */
+  const lvl = s.up ? s.up.canons : 0;
+  if (abeam) for (let i = 0; i < Math.floor(lvl / 3); i++) list.push({ arc: 'side', side, x: (i % 2 ? 0.12 : -0.12) * (1 + i), dmg: 12, range: 410 });
+  if (ar < 0.4 && d < 410) for (let i = 0; i < (lvl >= 2 ? 1 : 0) + (lvl >= 6 ? 1 : 0); i++) list.push({ arc: 'bow', wide: 0.4, x: 0.45, dmg: 12, range: 410 });
+  if (!list.length) return 0;
+  const c = Math.cos(s.h), n = Math.sin(s.h);
+  for (const g of list) {
+    const by = g.arc === 'side' ? g.side * s.wid * 0.5 : 0, bx = g.x * s.len;
+    const ox = s.x + bx * c - by * n, oy = s.y + bx * n + by * c;
+    const a = (g.arc === 'side' ? s.h + g.side * Math.PI / 2 : Math.atan2(t.y - oy, t.x - ox)) + rndSym(CORS_FOE.aim);
+    G.shots.push({ x: ox, y: oy, vx: Math.cos(a) * 520 + s.vx * 0.5, vy: Math.sin(a) * 520 + s.vy * 0.5, life: g.range / 520, owner: s, dmg: 10, dmgE: g.dmg * (s.kE || 0.5), kind: 'boulet', src: 'ship' });
+    fx.muzzle(ox, oy, Math.cos(a), Math.sin(a));
+  }
+  Snd.cannon(list.length > 2 ? 22 : 14, dist(s.x, s.y, G.me.x, G.me.y));
+  G.flashAt = [s.x, s.y, 120 + list.length * 60];
+  s.fireT = W.t; s.fireSide = abeam ? side : 0; s.fireChase = !abeam;
+  if (abeam) s.kick = -side * Math.min(0.08, 0.02 * list.length);
+  return list.length;
+}
+
+/* l'enfilade : le boulet d'un navire file dans l'axe d'un autre (à moins de 25 degrés) et le frappe
+ * par l'avant ou par l'arrière ; au corsaire seulement, et de navire à navire (les batteries tirent
+ * comme avant) */
+function corsRake(s, p) {
+  if (!(G.game === 'arcade' && G.arc && G.arc.variant === 'corsaire' && G.cors) || !p.owner || !p.owner.spec) return false;
+  const v = Math.hypot(p.vx, p.vy) || 1, c = Math.cos(s.h), n = Math.sin(s.h);
+  if (Math.abs(p.vx * c + p.vy * n) / v < 0.906) return false;
+  return Math.abs((p.x - s.x) * c + (p.y - s.y) * n) > s.len * 0.22;
+}
+function corsRakeSaid(s, p, ours) {
+  if (W.t - (s._rakeSaid || -9) < 1.2) return;
+  s._rakeSaid = W.t;
+  floatText(s.x, s.y - 34, T(ours ? 'cor.rakeMe' : 'cor.rake'), ours ? 'bad' : 'gold');
+  Snd.crack();
+  fx.splinters(p.x, p.y, 10, '#c8b088');
+  if (!ours && G.cors.tuto) G.cors.tuto.raked = true;
+  else if (!ours && !G.cors.tips.rake) { G.cors.tips.rake = true; showHint(T('cor.tip.rake')); }
+}
+
+/* touché à mort : il rompt et fait route vers le port ennemi le plus proche ; false s'il n'en a pas.
+ * Pas vers celui que vous attaquez, ni vers celui où vous êtes : sous le feu, on ne répare rien */
+function corsRetreat(s) {
+  const C = s.cors, K = G.cors, me = G.me;
+  let P = null, bd = 9000;
+  for (const q of K.ports) {
+    if (q.state !== 'enemy' || q.alarmT > 0 || dist(q.hx, q.hy, me.x, me.y) < 1600) continue;
+    const dd = dist(q.hx, q.hy, s.x, s.y); if (dd < bd) { bd = dd; P = q; }
+  }
+  if (!P) return false;
+  C.state = 'repair'; C.dest = P; C.path = corsPath(s.x, s.y, P.hx, P.hy); C.pi = 0; C.lead = null; C.mended = true;
+  if (dist(s.x, s.y, G.me.x, G.me.y) < cam.w) floatText(s.x, s.y - 50, T('cor.retreat', shipName(s.spec)), 'gold');
+  return true;
+}
+/* il se replie, à l'allure que lui laisse sa coque (on peut le rattraper), ses pièces de retraite
+ * sur qui le suit ; au port, on le répare */
+function corsRepairAI(s, dt, me, d) {
+  const C = s.cors, P = C.dest;
+  if (!P || P.state !== 'enemy') { if (!corsRetreat(s)) { C.state = 'patrol'; C.dest = null; C.path = []; } return; }
+  /* vous attaquez le port où il se répare : il se bat avec ce qui lui reste */
+  if (P.alarmT > 0) { C.state = 'patrol'; C.dest = null; C.path = []; corsHunt(s, 60); return; }
+  if (dist(s.x, s.y, P.hx, P.hy) > 260) {
+    if (!C.path.length) { C.path = corsPath(s.x, s.y, P.hx, P.hy); C.pi = 0; }
+    if (corsFollow(s, dt, 0.7)) C.path = [];
+  } else {
+    s.throttle = lerp(s.throttle, 0, clamp(dt, 0, 1));
+    steerShip(s, dt, false, false, false, false);
+    s.hull = Math.min(s.hullMax, s.hull + s.hullMax * 0.05 * dt);
+    if (s.hull >= s.hullMax * 0.92) { C.state = 'patrol'; C.dest = null; C.path = []; C.waitT = rnd(4, 1); }
+  }
+  s.ai.fireT -= dt;
+  if (s.ai.fireT <= 0 && d < 430 && !me.sinking && !corsSafe(me.x, me.y) && corsFire(s, me)) s.ai.fireT = rnd(CORS_FOE.rate[1], CORS_FOE.rate[0]) * (s.ai.slow || 1);
+}
+
 /* une prise : l'équipage de prise la mène au port à vous le plus proche */
 function corsPrize(s, dt) {
   const C = s.cors, me = G.me;
@@ -1703,9 +1986,11 @@ function corsPrize(s, dt) {
 
 function corsPortsStep(dt) {
   const me = G.me, C = G.cors;
+  corsShellsStep(dt);
   for (const P of C.ports) {
     if (P.alarmT > 0) P.alarmT -= dt;
     if (P.hitT > 0) P.hitT -= dt;
+    if (P.role !== 'home') corsDefenses(P, dt);
     if (P.state === 'down') {
       /* la ville réduite au silence fume ; si personne ne la prend, l'ennemi relève sa batterie */
       P.downT -= dt;
@@ -1722,7 +2007,8 @@ function corsPortsStep(dt) {
       for (const f of C.fleet) { if (f.sinking) continue; const d = dist(P.bx, P.by, f.x, f.y) * (f.fleet && f.fleet.rep && !f.fleet.arr ? 1.6 : 1); if (d < bd) { bd = d; t = f; } }
       if (t) {
         P.fireT -= dt;
-        if (P.fireT <= 0) { P.fireT = rnd(3.3, 2.2) * (1 - 0.025 * Math.min(12, C.threat)) * corsD().fire; corsPortFire(P, t); }
+        /* pas dans la mêlée : un de ses navires près de la cible, ou dans la ligne de tir, et elle attend */
+        if (P.fireT <= 0) { if (corsFriendInLine(P.bx, P.by, t)) { P.fireT = 0.4; if (t === me && !C.tips.shield && P.alarmT > 0) { C.tips.shield = true; showHint(T('cor.tip.shield')); } } else { P.fireT = rnd(3.3, 2.2) * (1 - 0.025 * Math.min(12, C.threat)) * corsD().fire; corsPortFire(P, t); } }
       }
       /* laissée tranquille, la batterie se répare */
       if (P.hp < P.hpMax && W.t - (P.hitAt || -99) > 30) P.hp = Math.min(P.hpMax, P.hp + P.hpMax * 0.004 * dt);
@@ -1763,15 +2049,133 @@ function corsOutpostsStep(P, dt) {
       let best = null, bd = 560;
       for (const s of corsAIs()) { if (s.sinking || s.captured) continue; const d = dist(o.x, o.y, s.x, s.y); if (d < bd) { bd = d; best = s; } }
       o.fireT = best ? rnd(3.6, 2.8) : 0.6;
-      if (best) corsGunFire(o.x, o.y, best, 2, 9, o.owner);
+      if (best) corsGunFire(o.x, o.y, best, 2, 9 * (best.toughF || 1), o.owner);
     } else {
       const range = P.alarmT > 0 ? 700 : 430;
       let t = null, bd = range;
       for (const f of C.fleet) { if (f.sinking) continue; const d = dist(o.x, o.y, f.x, f.y) * (f.fleet && f.fleet.rep && !f.fleet.arr ? 1.6 : 1); if (d < bd) { bd = d; t = f; } }
+      if (t && corsFriendInLine(o.x, o.y, t)) { o.fireT = 0.4; continue; }
       o.fireT = t ? rnd(3.8, 2.6) * (1 - 0.02 * Math.min(12, C.threat)) * corsD().fire : 0.6;
       if (t) corsGunFire(o.x, o.y, t, 1 + (C.threat >= 5 ? 1 : 0), 6, o.owner);
     }
   }
+}
+
+/* ---------- les défenses propres à chaque ville ----------
+ * Les grandes villes ont deux mortiers dans leur batterie : leurs bombes montent haut et retombent
+ * là où un cercle rouge se resserre sur l'eau ; on les évite en changeant de cap ou d'allure, et
+ * faire taire la batterie fait taire les mortiers. Les villes à donjon ont leur château, qui tire
+ * de loin par-dessus les toits, et jusqu'à ce que la ville soit prise ; à vous, il défend le port.
+ * Les autres ports (ni mortiers ni château) lâchent des brûlots quand on les attaque. */
+const CORS_MORTAR = { dmg: 20, r: 40, T: 2.4, apex: 210, every: [9, 6.5] };
+const CORS_CASTLE = { dmg: 6, every: [10, 7] };
+const CORS_FIRESHIP = { every: [50, 32], near: 750 };
+/* le navire de votre flotte le plus proche, entre lo et hi d'un point */
+function corsFleetNear(x, y, lo, hi) {
+  let t = null, bd = hi;
+  for (const f of G.cors.fleet) { if (f.sinking) continue; const d = dist(x, y, f.x, f.y) * (f.fleet && f.fleet.rep && !f.fleet.arr ? 1.6 : 1); if (d >= lo && d < bd) { bd = d; t = f; } }
+  return t;
+}
+function corsDefenses(P, dt) {
+  const C = G.cors, me = G.me, D = corsD();
+  if (P.major && P.state === 'enemy') {
+    P.mortT = (P.mortT === undefined ? rnd(4, 2) : P.mortT) - dt;
+    if (P.mortT <= 0) {
+      const t = corsFleetNear(P.bx, P.by, 180, P.alarmT > 0 ? 1050 : 650);
+      P.mortT = t ? rnd(CORS_MORTAR.every[0], CORS_MORTAR.every[1]) * D.fire * (1 - 0.02 * Math.min(12, C.threat)) : 1;
+      if (t) corsMortar(P, t);
+    }
+  }
+  if (!P.major && !P.castle && P.state === 'enemy' && P.alarmT > 0) {
+    P.fsT = (P.fsT === undefined ? rnd(9, 5) : P.fsT) - dt;
+    if (P.fsT <= 0) {
+      P.fsT = rnd(CORS_FIRESHIP.every[0], CORS_FIRESHIP.every[1]) * D.fire;
+      if (!me.sinking && dist(me.x, me.y, P.hx, P.hy) < CORS_FIRESHIP.near && !G.objs.some((o) => o.type === 'brulot' && o.port === P)) corsFireship(P, me);
+    }
+  }
+  if (P.castle) corsCastleStep(P, dt);
+}
+
+/* une bombe de mortier : elle part de la batterie, monte, et retombe où sera le navire, à peu près */
+function corsMortar(P, t) {
+  const C = G.cors, D = corsD(), d = dist(P.bx, P.by, t.x, t.y), ft = CORS_MORTAR.T + d / 900;
+  const x = t.x + t.vx * ft * 0.8 + rndSym(45), y = t.y + t.vy * ft * 0.8 + rndSym(45);
+  if (G.mapLand(x, y)) return;
+  C.shells.push({ x0: P.bx, y0: P.by, x, y, t: 0, T: ft, dmg: CORS_MORTAR.dmg * (0.6 + 0.4 * corsRamp(C.threat)) * D.dmg, r: CORS_MORTAR.r, apex: CORS_MORTAR.apex + d * 0.12 });
+  for (let i = 0; i < 6; i++) fx.push({ k: 'smoke', x: P.bx + rndSym(8), y: P.by + rndSym(8), z0: 12, vx: rndSym(14), vy: rndSym(14), r: rnd(9, 5), grow: 12, life: rnd(2.6, 1.6), age: 0, a: 0.55, tone: 2, air: true });
+  fx.push({ k: 'flash', x: P.bx, y: P.by, vx: 0, vy: 0, r: 8, grow: 60, life: 0.16, age: 0, a: 1 });
+  Snd.cannon(26, dist(P.bx, P.by, G.me.x, G.me.y));
+  if (!C.tips.mortar && dist(P.bx, P.by, G.me.x, G.me.y) < 1100) { C.tips.mortar = true; showHint(T('cor.tip.mortar')); }
+}
+function corsShellsStep(dt) {
+  const C = G.cors, me = G.me;
+  for (let i = C.shells.length - 1; i >= 0; i--) {
+    const b = C.shells[i];
+    b.t += dt;
+    if (b.t < b.T) continue;
+    C.shells.splice(i, 1);
+    /* elle tombe : en plein sur un navire, ou tout près ; sinon une gerbe d'eau */
+    let hit = false;
+    for (const f of C.fleet) {
+      if (f.sinking) continue;
+      const k = hitsShip(f, b.x, b.y, b.r * 0.45) ? 1 : hitsShip(f, b.x, b.y, b.r) ? 0.5 : 0;
+      if (!k) continue;
+      if (damageShip(f, b.dmg * k)) { hit = true; if (f === me) { G.shake = Math.min(1.4, (G.shake || 0) + 0.6 * k); floatText(me.x, me.y - 30, T('cor.mortar.hit'), 'bad'); } }
+    }
+    if (hit) { fx.explosion(b.x, b.y, 0.8); Snd.crack(); }
+    else { fx.splash(b.x, b.y, 2.2); Snd.splash(dist(b.x, b.y, me.x, me.y)); }
+  }
+}
+
+/* un brûlot sort du port, droit sur vous */
+function corsFireship(P, t) {
+  const a = Math.atan2(t.y - P.hy, t.x - P.hx), x = P.hx + Math.cos(a) * 60, y = P.hy + Math.sin(a) * 60;
+  if (G.mapLand(x, y)) return;
+  const sp = rnd(ARC.brulot.speed[1], ARC.brulot.speed[0]) * 0.85;
+  const o = addObj('brulot', 0, x, y, Math.cos(a) * sp, Math.sin(a) * sp);
+  o.life = 18; o.target = t; o.homeT = 3.4; o.port = P;
+  floatText(x, y - 20, T('cor.fireship', portName(P)), 'bad');
+  Snd.bell(1);
+  if (!G.cors.tips.fireship) { G.cors.tips.fireship = true; showHint(T('cor.tip.fireship')); }
+}
+
+/* le château : ennemi, il tire sur votre flotte par-dessus la ville (la ville prise, il se tait) ;
+ * à vous, sur les navires ennemis qui approchent */
+function corsCastleStep(P, dt) {
+  const C = G.cors, D = corsD(), [cx, cy] = P.castle;
+  /* il commande la rade et la plage, pas toute la baie */
+  const range = P.castleR || (P.castleR = Math.max(520, dist(cx, cy, P.hx, P.hy) + 160));
+  P.castT = (P.castT === undefined ? rnd(4, 2) : P.castT) - dt;
+  if (P.castT > 0) return;
+  if (P.state === 'ours') {
+    let best = null, bd = range;
+    for (const s of corsAIs()) { if (s.sinking || s.captured) continue; const d = dist(cx, cy, s.x, s.y); if (d < bd) { bd = d; best = s; } }
+    P.castT = best ? rnd(CORS_CASTLE.every[0], CORS_CASTLE.every[1]) : 1;
+    if (best) corsCastleFire(P, best, 12 * (best.toughF || 1), undefined);
+    return;
+  }
+  /* il ne se mêle de rien tant qu'on n'attaque pas la ville ; l'alarme donnée, il tire jusqu'à ce
+   * qu'elle soit prise */
+  const t = P.state === 'down' || P.alarmT > 0 ? corsFleetNear(cx, cy, 0, range) : null;
+  P.castT = t ? rnd(CORS_CASTLE.every[0], CORS_CASTLE.every[1]) * D.fire * (1 - 0.02 * Math.min(12, C.threat)) : 1;
+  if (t) {
+    corsCastleFire(P, t, 10, CORS_CASTLE.dmg * (0.6 + 0.4 * corsRamp(C.threat)) * D.dmg);
+    if (!C.tips.castle && dist(cx, cy, G.me.x, G.me.y) < range) { C.tips.castle = true; showHint(T('cor.tip.castle', portName(P))); }
+  }
+}
+function corsCastleFire(P, t, dmg, dmgE) {
+  const [cx, cy] = P.castle, d = dist(cx, cy, t.x, t.y), lt = d / 520;
+  const a = Math.atan2(t.y + t.vy * lt - cy, t.x + t.vx * lt - cx) + rndSym(0.05);
+  /* le boulet passe par-dessus les toits : il ne s'arrête pas à la terre avant d'avoir gagné l'eau */
+  let land = 0;
+  for (let k = 20; k < d && G.mapLand(cx + Math.cos(a) * k, cy + Math.sin(a) * k); k += 20) land = k;
+  const shot = { x: cx, y: cy, vx: Math.cos(a) * 520, vy: Math.sin(a) * 520, life: (d + 90) / 520, owner: P.owner, dmg, kind: 'boulet', grace: (land + 40) / 520, src: 'castle' };
+  if (dmgE !== undefined) shot.dmgE = dmgE;
+  G.shots.push(shot);
+  fx.muzzle(cx, cy, Math.cos(a), Math.sin(a));
+  P.castFired = W.t;
+  for (let i = 0; i < 3; i++) fx.push({ k: 'smoke', x: cx + rndSym(6), y: cy + rndSym(6), z0: 24, vx: rndSym(10), vy: rndSym(10), r: rnd(7, 4), grow: 10, life: rnd(2.4, 1.4), age: 0, a: 0.5, tone: 2, air: true });
+  Snd.cannon(20, dist(cx, cy, G.me.x, G.me.y));
 }
 
 /* une pièce de côte tire : n boulets vers la cible, en visant devant elle */
@@ -1781,10 +2185,23 @@ function corsGunFire(x0, y0, t, n, dmg, owner) {
   for (let i = 0; i < n; i++) {
     const a = Math.atan2(ty_ - y0, tx_ - x0) + rndSym(0.1);
     const x = x0 + Math.cos(a) * 22, y = y0 + Math.sin(a) * 22;
-    G.shots.push({ x, y, vx: Math.cos(a) * 520, vy: Math.sin(a) * 520, life: 1.6, owner, dmg, kind: 'boulet', grace: 0.6 });
+    G.shots.push({ x, y, vx: Math.cos(a) * 520, vy: Math.sin(a) * 520, life: 1.6, owner, dmg, kind: 'boulet', grace: 0.6, src: 'outpost' });
     fx.muzzle(x, y, Math.cos(a), Math.sin(a));
   }
   Snd.cannon(16, dist(x0, y0, G.me.x, G.me.y));
+}
+
+/* les batteries et les forts ne tirent pas dans la mêlée : un navire des leurs près de la cible, ou
+ * dans la ligne de tir, et ils retiennent leur feu (on peut s'en faire un bouclier) */
+function corsFriendInLine(x0, y0, t) {
+  const dx = t.x - x0, dy = t.y - y0, L2 = dx * dx + dy * dy || 1;
+  for (const s of corsAIs()) {
+    if (s.sinking || s.captured || s.faction !== 'imperial') continue;
+    if (dist(s.x, s.y, t.x, t.y) < 110) return true;
+    const u = ((s.x - x0) * dx + (s.y - y0) * dy) / L2;
+    if (u > 0 && u < 1 && Math.hypot(x0 + dx * u - s.x, y0 + dy * u - s.y) < 50 + s.len * 0.3) return true;
+  }
+  return false;
 }
 
 /* une batterie ennemie tire sur vous (ou sur un navire de votre flotte) */
@@ -1796,7 +2213,7 @@ function corsPortFire(P, t) {
   for (let i = 0; i < n; i++) {
     const a = Math.atan2(ty_ - P.by, tx_ - P.bx) + rndSym(0.1);
     const x = P.bx + Math.cos(a) * 30, y = P.by + Math.sin(a) * 30;
-    G.shots.push({ x, y, vx: Math.cos(a) * 520, vy: Math.sin(a) * 520, life: 1.7, owner: P.owner, dmg: 6, kind: 'boulet', grace: 0.6 });
+    G.shots.push({ x, y, vx: Math.cos(a) * 520, vy: Math.sin(a) * 520, life: 1.7, owner: P.owner, dmg: 6, kind: 'boulet', grace: 0.6, src: 'battery' });
     fx.muzzle(x, y, Math.cos(a), Math.sin(a));
   }
   Snd.cannon(18, dist(P.bx, P.by, G.me.x, G.me.y));
@@ -1809,7 +2226,7 @@ function corsFortFire(P, t) {
   for (let i = 0; i < FORT.guns[P.fort]; i++) {
     const a = Math.atan2(ty_ - P.by, tx_ - P.bx) + rndSym(0.07);
     const x = P.bx + Math.cos(a) * 30, y = P.by + Math.sin(a) * 30;
-    G.shots.push({ x, y, vx: Math.cos(a) * 520, vy: Math.sin(a) * 520, life: 1.6, owner: P.owner, dmg: 10, kind: 'boulet', grace: 0.6 });
+    G.shots.push({ x, y, vx: Math.cos(a) * 520, vy: Math.sin(a) * 520, life: 1.6, owner: P.owner, dmg: 10 * (t.toughF || 1), kind: 'boulet', grace: 0.6 });
     fx.muzzle(x, y, Math.cos(a), Math.sin(a));
   }
   Snd.cannon(18, dist(P.bx, P.by, G.me.x, G.me.y));
@@ -2058,6 +2475,10 @@ function corsaireOver() {
   const C = G.cors;
   G.mode = 'over';
   corsClearBanner();
+  if (C.tuto) {
+    showResults({ kicker: T('tuto.title'), title: T('cor.res.sank', fleetName(G.me, true), ''), actions: [{ label: T('tuto.again'), go: startCorsaireTuto }, { label: T('menu.main'), go: showTitle }] });
+    return;
+  }
   const isRecord = G.score > (G.best || 0);
   G.best = Math.max(G.best || 0, G.score);
   const [bk] = corsRecKey(C.diff || 0);
@@ -2112,6 +2533,7 @@ function corsVictory() {
 function corsGoalLine() {
   const C = G.cors, me = G.me, P = C.here;
   if (me.sinking) return '';
+  if (C.tuto && C.tuto.step && !C.board && !(C.landing && C.landing.why !== 'away')) return tutoGoal();
   if (C.board) return T('cor.g.board');
   if (P && P.state === 'ours') return T(CORS_ARSENALS.includes(P.id) && !C.bought[P.id] ? 'cor.g.arsenal' : 'cor.g.yard', portName(P));
   const L = C.landing;
@@ -2126,6 +2548,7 @@ function corsGoalLine() {
 function corsTargets(out) {
   const C = G.cors, me = G.me;
   if (me.sinking) return;
+  if (C.tuto) tutoTargets(out);
   const vig = me.cfg.vigie || 0;
   G.chests.slice().sort((a, b) => dist(a.x, a.y, me.x, me.y) - dist(b.x, b.y, me.x, me.y)).slice(0, 2 + vig).forEach((c) => out.push([c.x, c.y, '#ffd98a', T('ptr.chest')]));
   /* la vigie signale les navires qui vous chassent, de plus en plus loin */
@@ -2160,8 +2583,16 @@ function corsaireDraw(c) {
     c.fillStyle = 'rgba(16,20,26,0.82)'; roundRect(c, px - 46, y - 8, 92, 10, 5); c.fill();
     c.fillStyle = ours ? (P.hitT > 0 ? '#ffffff' : '#9ad08a') : P.alarmT > 0 ? '#ff7a5a' : '#c8b07a';
     roundRect(c, px - 44, y - 6, 88 * f, 6, 3); c.fill();
-    const lab = (ours ? T('cor.fort', P.fort) : T(P.alarmT > 0 ? 'cor.battery.alarm' : 'cor.battery')) + (CORS_ARSENALS.includes(P.id) && !C.bought[P.id] ? ' · ' + T('cor.arsenal') : '');
+    const lab = (ours ? T('cor.fort', P.fort) : T(P.alarmT > 0 ? 'cor.battery.alarm' : 'cor.battery')) + (!ours && P.major ? ' · ' + T('cor.mortars') : '') + (CORS_ARSENALS.includes(P.id) && !C.bought[P.id] ? ' · ' + T('cor.arsenal') : '');
     label(lab, px, y + 18, ours ? '#c8f0c8' : P.alarmT > 0 ? '#ff9a7a' : '#efe2c0');
+  }
+  /* les châteaux : ennemis, ils tirent (en rouge quand le coup vient de partir) ; à vous, ils défendent */
+  for (const P of C.ports) {
+    if (!P.castle) continue;
+    const [px, py, ok] = toScreen(P.castle[0], P.castle[1], 40);
+    if (!ok || px < -60 || py < -60 || px > cam.pw + 60 || py > cam.ph + 60) continue;
+    c.font = 'italic 600 12px "Palatino Linotype", Georgia, serif';
+    label(T(P.state === 'ours' ? 'cor.castle.ours' : 'cor.castle'), px, py + 30, P.state === 'ours' ? '#c8f0c8' : W.t - (P.castFired || -9) < 1.2 ? '#ff9a7a' : '#efe2c0');
   }
   /* les forts avancés : leur état, et ce qu'il leur reste */
   for (const P of C.ports) {
@@ -2186,7 +2617,7 @@ function corsaireDraw(c) {
     c.font = '600 13px "Palatino Linotype", Georgia, serif';
     if (s.captured) { label(T('cor.prize.tag', shipName(s.spec)), px, py - 46, '#9ad8a0'); continue; }
     const lvl = s.up.voilure + s.up.coque + s.up.canons;
-    label(shipName(s.spec) + ' · ' + lvl, px, py - 46, s.cors.state === 'hunt' ? '#ff8a6a' : s.cors.state === 'siege' ? '#ffb070' : '#e8dcc0');
+    label(shipName(s.spec) + ' · ' + lvl + (s.cors.state === 'repair' ? ' · ' + T('cor.retreating') : ''), px, py - 46, s.cors.state === 'hunt' ? '#ff8a6a' : s.cors.state === 'siege' ? '#ffb070' : s.cors.state === 'repair' ? '#d8c8a8' : '#e8dcc0');
     const f = clamp(s.hull / s.hullMax, 0, 1);
     c.fillStyle = 'rgba(16,20,26,0.8)'; roundRect(c, px - 30, py - 40, 60, 6, 3); c.fill();
     c.fillStyle = f > 0.5 ? '#9ad08a' : f > 0.25 ? '#e0c060' : '#e06a50'; roundRect(c, px - 29, py - 39, 58 * f, 4, 2); c.fill();
@@ -2273,8 +2704,8 @@ function corsaireMini(c, P, me, radius) {
 /* le HUD du corsaire : ports, or, charbon */
 function corsHud() {
   const C = G.cors, me = G.me;
-  setText('h-level-l', T('cor.hud.ports'));
-  setText('h-level', corsOwned() + ' / ' + CORS_PORTS);
+  setText('h-level-l', T(C.tuto ? 'tuto.hud' : 'cor.hud.ports'));
+  setText('h-level', C.tuto ? Math.min(TUTO.steps.length, C.tuto.i + 1) + ' / ' + TUTO.steps.length : corsOwned() + ' / ' + CORS_PORTS);
   setText('h-goal', corsGoalLine());
   setHtml('h-crates', '');
   setText('h-score-l', T('cor.hud.gold'));
@@ -2434,16 +2865,30 @@ addStr({
   'cor.win.go': ['Continuer la traversée', 'Carry on sailing', '航海を続ける'],
   'res.capsized': ['Le {0} a chaviré', 'The {0} has capsized', '{0}は転覆した'],
   'cor.seen': ['En vue : le {0}, {1}', 'Sighted: the {0}, {1}', '{0}（{1}）が見えた'],
+  'cor.rake': ['enfilade !', 'raking fire!', '縦射！'],
+  'cor.mortar.hit': ['une bombe de mortier !', 'a mortar bomb!', '臼砲弾が命中！'],
+  'cor.mortars': ['mortiers', 'mortars', '臼砲'],
+  'cor.tip.mortar': ['Les grandes villes ont des mortiers : leurs bombes montent haut et retombent là où le cercle rouge se resserre. Changez de cap ou d\'allure, elles tombent à l\'eau. Faire taire la batterie fait taire ses mortiers.', 'The great cities have mortars: their bombs climb high and fall where the red circle tightens. Change course or speed and they fall into the sea. Silencing the battery silences its mortars.', '大きな町には臼砲がある。砲弾は高く上がり、赤い円が縮むところに落ちる。針路か速さを変えれば海に落ちる。砲台を黙らせれば臼砲も黙る。'],
+  'cor.castle': ['château', 'castle', '城'],
+  'cor.castle.ours': ['château · à vous', 'castle · yours', '城・味方'],
+  'cor.tip.castle': ['Le château de {0} tire de loin, par-dessus les toits, et ne se tait que lorsque la ville est prise. Débarquez vite ; une fois à vous, il défendra le port.', 'The castle of {0} fires from afar, over the rooftops, and falls silent only when the town is taken. Land quickly; once yours, it will defend the port.', '{0}の城は屋根越しに遠くから撃ってくる。町を取るまで黙らない。急いで上陸せよ。取れば港を守ってくれる。'],
+  'cor.fireship': ['un brûlot sort de {0} !', 'a fireship comes out of {0}!', '{0}から火船が出てきた！'],
+  'cor.tip.fireship': ['Attaqués, les ports qui n\'ont ni mortiers ni château lâchent des brûlots. Évitez-les, ou brisez-les au canon avant qu\'ils ne vous touchent.', 'Under attack, the ports with neither mortars nor castle send out fireships. Avoid them, or break them with your guns before they reach you.', '臼砲も城もない港は、攻められると火船を出す。避けるか、届く前に砲で砕け。'],
+  'cor.tip.rake': ['L\'enfilade : un boulet qui prend un navire par l\'avant ou par l\'arrière, dans toute sa longueur, fait double mal. Passez devant son étrave ou derrière sa poupe, et lâchez la bordée ; et ne lui présentez pas les vôtres.', 'Raking fire: a ball that strikes a ship from ahead or astern, along her whole length, does double damage. Cross her bow or her stern and let fly the broadside; and do not show her yours.', '縦射：艦首か艦尾から船体の縦に沿って当たった弾は二倍の損害を与える。敵の艦首の前か艦尾の後ろを横切って舷側斉射を浴びせよ。自分の艦首と艦尾は敵に向けるな。'],
+  'cor.rakeMe': ['pris en enfilade !', 'raked!', '縦射を受けた！'],
+  'cor.retreat': ['le {0} rompt le combat pour réparer', 'the {0} breaks off to repair', '{0}が修理のため離脱'],
+  'cor.retreating': ['en retraite', 'retreating', '退却中'],
+  'cor.tip.shield': ['La batterie retient son feu : un navire des siens est trop près de vous, ou dans sa ligne de tir. Battez-vous contre lui sous ses murs : elle n\'ose pas tirer.', 'The battery holds its fire: one of its own ships is too close to you, or in its line of fire. Fight her under its walls: it dare not shoot.', '砲台が撃つのを控えている。味方の艦があなたに近すぎるか、射線上にいるのだ。城壁の下でその艦と戦えば、砲台は撃てない。'],
   /* l'aide, en corsaire */
   'help.enter': ['Dans un port à vous (cercle vert) : le chantier, ou l\'arsenal. Bord à bord : l\'abordage, quand le curseur passe dans l\'or.', 'In one of your ports (green circle): the shipyard, or the arsenal. Alongside: boarding, as the cursor crosses the gold.', '自分の港（緑の円）では造船所か工廠。舷を寄せたら、カーソルが金色を通るときに斬り込み。'],
   'help.c1d': ['se brisent en deux, puis encore ; certains lâchent un petit coffre', 'break in two, then again; some drop a small chest', '二つに割れ、さらに割れる。小さな箱を落とすものもある'],
   'help.c5d': ['attire tout, engloutit les coffres', 'pulls everything in, swallows chests', 'すべてを引き寄せ、箱を呑み込む'],
   'help.up.c': ['Machine en avant ; deux appuis coup sur coup : le coup de boutoir, pour éperonner.', 'Engine ahead; two quick presses: ramming speed, to ram.', '機関前進。素早く二度押すと体当たり（衝角攻撃）。'],
-  'help.fire.c': ['Feu, et la bordée sur l\'ennemi par le travers, même bord à bord.', 'Fire, with the broadside on an enemy abeam, even alongside.', '射撃。真横の敵には舷側斉射。舷を寄せていても撃てる。'],
+  'help.fire.c': ['Feu, et la bordée sur l\'ennemi par le travers, même bord à bord. Dans sa longueur, par l\'avant ou l\'arrière (l\'enfilade), un boulet fait double mal.', 'Fire, with the broadside on an enemy abeam, even alongside. Along her length, from ahead or astern (raking fire), a ball does double damage.', '射撃。真横の敵には舷側斉射。舷を寄せていても撃てる。艦首か艦尾から縦に当てれば（縦射）、損害は二倍。'],
   'help.c6': ['Coffre d\'or', 'Gold chest', '小判の箱'],
   'help.c6d': ['de l\'or pour le chantier ; les navires ennemis les repêchent aussi', 'gold for the shipyard; enemy ships fish them up too', '造船所で使う小判。敵艦も拾っていく'],
   'help.c7': ['Batterie d\'un port', 'Harbour battery', '港の砲台'],
-  'help.c7d': ['faites-la taire, ses forts avancés aussi si vous voulez, puis débarquez : devant la plage (cercle doré), navire stoppé', 'silence it, its outlying forts too if you like, then land: off the beach (gold circle), ship stopped', '黙らせ、望むなら出砲台も。浜の前（金の円）で停船して上陸'],
+  'help.c7d': ['faites-la taire, ses forts avancés aussi si vous voulez, puis débarquez : devant la plage (cercle doré), navire stoppé. Les grandes villes ont des mortiers, les villes à donjon leur château ; les autres lâchent des brûlots', 'silence it, its outlying forts too if you like, then land: off the beach (gold circle), ship stopped. The great cities have mortars, the castle towns their castle; the others send out fireships', '黙らせ、望むなら出砲台も。浜の前（金の円）で停船して上陸。大きな町には臼砲、天守のある町には城がある。ほかの港は火船を出す'],
   'help.c8': ['Port à vous', 'Your port', '自分の港'],
   'help.c8d': ['chantier, réparations, vivres et charbon ; cinq grandes villes ont un arsenal, où armer un navire de plus', 'shipyard, repairs, stores and coal; five great cities have an arsenal, to fit out one more ship', '造船所、修理、食糧と石炭。五つの大きな町には工廠があり、もう一隻を艤装できる'],
   'help.close': ['Un choc coûte de la coque, jamais une pièce du navire : ce que le chantier a construit reste. Les vivres et le charbon s\'épuisent en mer ; à vide, le navire n\'avance plus qu\'au tiers de sa vitesse.', 'A collision costs hull, never a part of the ship: what the shipyard built stays. Stores and coal run down at sea; once they are gone the ship makes only a third of her speed.', '衝突で減るのは船体だけで、造船所で造ったものは失われない。食糧と石炭は海で減り、尽きると速さは三分の一になる。'],

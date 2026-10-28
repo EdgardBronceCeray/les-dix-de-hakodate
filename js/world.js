@@ -272,6 +272,8 @@ function helmStep(s, dt) {
 /* le navire se couche, les vergues touchent l'eau, et il chavire */
 function capsize(s) {
   if (s.sinking) return;
+  /* le didacticiel : le navire se relève de justesse */
+  if (s.noCapsize) { s.gite = 0.7; s.giteHold = 0; floatText(s.x, s.y - 30, T('helm.saved'), 'gold'); return; }
   s.capsized = true;
   s.capSide = (s.heel || 0) < 0 ? -1 : 1;
   s.capT = 0;
@@ -389,8 +391,12 @@ function shotHits(p, onShip) {
     const isMe = s === G.me, ours = isMe || !!s.fleet;
     /* les boulets pleins de 300 livres du Kōtetsu font plus de mal que les autres ; les navires
      * de votre flotte (corsaire) encaissent comme le vôtre */
-    const dmg = p.kind === 'balle' ? (ours ? 0.35 : 1) : ours ? (p.owner.heavy ? 9 : 5) * (p.owner.dmgMe || 1) : p.dmg;
+    let dmg = p.kind === 'balle' ? (ours ? 0.35 : 1) : ours ? (p.dmgE !== undefined ? p.dmgE : (p.owner.heavy ? 9 : 5) * (p.owner.dmgMe || 1)) : p.dmg;
+    /* le corsaire : un boulet qui prend le navire dans sa longueur (l'enfilade) fait double mal */
+    const rake = p.kind === 'boulet' && typeof corsRake === 'function' && corsRake(s, p);
+    if (rake) dmg *= 2;
     if (damageShip(s, dmg)) {
+      if (rake) corsRakeSaid(s, p, ours);
       fx.hit(p.x, p.y);
       if (p.kind === 'boulet') Snd.hit(isMe ? 0 : dist(s.x, s.y, G.me.x, G.me.y));
       if (isMe) G.shake = Math.min(1, (G.shake || 0) + 0.25);
