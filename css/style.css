@@ -615,3 +615,12 @@ html.touch #menu > .t-desc { position: absolute; left: 7vw; bottom: 12px; margin
   html.touch .side-block:not(.cors-block) > .main-list { margin-top: 2vh; }
   html.touch .side-block:not(.cors-block) .item { font-size: 22px; padding: 7px 18px 7px 30px; }
 }
+/* l'écran-titre : le carton de la page Facebook, en haut à droite, au-dessus de De Nicol */
+.title-social { position: absolute; top: 3.2vh; right: 2.5vw; z-index: 2; display: flex; flex-direction: column; gap: 3px; width: min(330px, 30vw); padding: 9px 14px 10px; border: 1px solid rgba(230, 184, 90, 0.42); border-radius: 10px; background: rgba(8, 13, 22, 0.5); color: var(--ivory); text-decoration: none; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); opacity: 0; transform: translateY(-6px); transition: opacity 0.9s ease 0.4s, transform 0.9s ease 0.4s, border-color 0.2s, background 0.2s; }
+.menu.in .title-social { opacity: 1; transform: none; }
+.title-social:hover, .title-social:focus-visible { border-color: var(--gold-1); background: rgba(20, 26, 38, 0.72); }
+.title-social .kicker { font-size: 11px; }
+.title-social .kicker i { font-style: normal; letter-spacing: 0; }
+.title-social .social-t { font-size: 13.5px; line-height: 1.38; font-style: italic; color: var(--ivory-2); }
+html.ja .title-social .social-t { font-style: normal; }
+@media (max-width: 1080px) { .title-social { display: none; } }
