@@ -221,7 +221,16 @@ function touchFit() {
   for (const n of root.querySelectorAll('.side-block > .lead')) n.classList.toggle('t-more', n.scrollTop + n.clientHeight < n.scrollHeight - 2);
 }
 
-function touchQuality() { if (!(R3.quality > 0)) { R3.quality = 1; applyQuality(); } }
+/* un téléphone ou une tablette part du palier 4 (voir applyQuality) et ne dessine pas plus de 60
+ * images par seconde ; s'il peine encore, le jeu passe de lui-même au palier 5. Un ordinateur à
+ * écran tactile garde ses paliers, un cran en dessous du maximum. */
+function touchQuality() {
+  const handheld = Math.min(screen.width, screen.height) < 600 || (window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(any-pointer: fine)').matches);
+  if (handheld) {
+    G.cap60 = true;
+    if (!(R3.quality >= 4)) { R3.quality = 4; applyQuality(); }
+  } else if (!(R3.quality > 0)) { R3.quality = 1; applyQuality(); }
+}
 
 /* sur l'écran d'accueil d'un téléphone, le jeu s'ouvre en plein écran, à l'horizontale, avec son
  * sceau pour icône (le manifeste n'a de sens que servi par un site, pas ouvert depuis le disque) */

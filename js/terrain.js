@@ -49,7 +49,14 @@ function edt(grid, W_, H_) {
  * (un seul maillage pour toute la carte était dessiné en entier, même hors de l'écran).
  * Les mêmes arbres, aux mêmes places, de la même teinte : seul le découpage change. */
 const CHUNK = 800;
-function addChunks(group, inst, margin) {
+/* les arbres et les éboulis d'un téléphone : on n'en dessine qu'une partie (voir applyQuality). Dans
+ * chaque morceau de forêt, les instances sont mêlées une fois pour toutes, sans tirage au sort (un
+ * simple brassage des numéros) : la partie dessinée se répartit sur toute la forêt, et sur un
+ * ordinateur, qui les dessine toutes, l'image ne change pas. */
+const THIN = { list: [], k: 1 };
+function thinApply(m) { m.count = Math.max(1, Math.round(m.userData.full * THIN.k)); }
+function thinSet(k) { THIN.k = k; for (const m of THIN.list) thinApply(m); }
+function addChunks(group, inst, margin, thin) {
   const n = inst.count, a = inst.instanceMatrix.array, cells = new Map();
   for (let i = 0; i < n; i++) {
     const key = Math.floor(a[i * 16 + 12] / CHUNK) + ',' + Math.floor(a[i * 16 + 14] / CHUNK);
@@ -59,6 +66,7 @@ function addChunks(group, inst, margin) {
   }
   const M = new THREE.Matrix4(), C = new THREE.Color();
   for (const idx of cells.values()) {
+    if (thin) idx.sort((i, j) => ((i * 2654435761) >>> 0) - ((j * 2654435761) >>> 0));
     const m = new THREE.InstancedMesh(inst.geometry, inst.material, idx.length);
     idx.forEach((i, j) => {
       inst.getMatrixAt(i, M); m.setMatrixAt(j, M);
@@ -68,6 +76,7 @@ function addChunks(group, inst, margin) {
     /* la sphère englobante, élargie de ce que le vent fait plier les cimes */
     m.computeBoundingSphere();
     m.boundingSphere.radius += margin;
+    if (thin) { m.userData.full = idx.length; THIN.list.push(m); thinApply(m); }
     group.add(m);
   }
 }
@@ -347,7 +356,7 @@ function buildTerrain(polys, opts) {
         inst.setColorAt(i, tmp.setHSL(0, 0, rr.range(0.82, 1.08)));
       });
       inst.castShadow = true; inst.receiveShadow = true;
-      addChunks(group, inst, 3);
+      addChunks(group, inst, 3, true);
     }
   }
   /* éboulis au pied des falaises */
@@ -383,7 +392,7 @@ function buildTerrain(polys, opts) {
       inst.setMatrixAt(i, M);
     });
     inst.castShadow = true; inst.receiveShadow = true;
-    addChunks(group, inst, 0.5);
+    addChunks(group, inst, 0.5, true);
   }
   /* écueils */
   if (o.rocks.length) {

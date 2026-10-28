@@ -73,6 +73,9 @@ addStr({
   /* le sous-titre : le premier jeu suit De Nicol, à bord du Kaiten */
   'title.sub': ['L\'aventure de De Nicol', 'De Nicol\'s Adventure', 'ド・ニコルの冒険'],
   'title.kicker': ['Combats de mer en Ezo', 'Sea battles off Ezo', '蝦夷の海戦'],
+  /* la page Facebook des Dix de Hakodate, à l'écran-titre : on y suit la BD, les jeux et tout leur univers */
+  'title.fb.k': ['Sur Facebook', 'On Facebook', 'Facebook'],
+  'title.fb': ['Suivez Les Dix de Hakodate : l\'actualité de la BD et des jeux, et tout l\'univers des Français au Japon au temps des samouraïs.', 'Follow The Ten of Hakodate: news of the graphic novel and the games, and the whole world of the French in Japan in the age of the samurai.', '『箱館の十人』をフォロー。漫画とゲームの最新情報、そして侍の時代の日本に渡ったフランス人たちの世界を。'],
   'title.tag': ['Le jeu officiel de la bande dessinée', 'The official game of the graphic novel', '漫画『箱館の十人』公式ゲーム'],
   'title.credit': ['La véritable histoire de Jules Brunet et des Français d\'Ezo · Night Workers', 'The True Story of Jules Brunet and the Frenchmen of Ezo · Night Workers', 'ジュール・ブリュネと蝦夷のフランス人たちの実話 · ナイトワーカーズ'],
 });

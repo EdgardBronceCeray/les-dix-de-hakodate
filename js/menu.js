@@ -75,6 +75,10 @@ const seal = '<span class="seal"><i>海</i><i>戦</i></span>';
 
 /* ---------- écran-titre ---------- */
 
+/* la page Facebook des Dix de Hakodate : un carton discret en haut à droite de l'écran-titre, vu à
+ * chaque lancement, qu'on touche ou qu'on clique pour la suivre (sans fenêtre qui interrompt le jeu) */
+const FB_PAGE = 'https://www.facebook.com/profile.php?id=61594997189542';
+
 function showTitle() {
   /* l'écran-titre redessiné sur place (langue, musique, son) : De Nicol ne refait pas son entrée */
   const again = MENU.screen === 'title';
@@ -119,6 +123,7 @@ function showTitle() {
       <nav class="main-list">${items.map(([t], i) => `<button class="item" data-item="${i}"><span class="bar"></span><span class="t">${t}</span></button>`).join('')}</nav>
       <p id="menu-desc" class="desc"></p>
     </div>
+    <a class="title-social" href="${FB_PAGE}" target="_blank" rel="noopener"><span class="kicker">${T('title.fb.k')} <i>↗</i></span><span class="social-t">${T('title.fb')}</span></a>
     ${hints()}`, { go: items.map((x) => x[2]), desc: items.map((x) => x[1]), lr: (d) => { if (MENU.sel === 5) cycleLang(d); } });
   Music.play('theme');
   const big = Math.round(clamp(Math.min(window.innerWidth * 0.062, window.innerHeight * 0.115), 46, 108));

@@ -139,6 +139,15 @@ function demoUpdate(dt) {
 
 function frame(now) {
   requestAnimationFrame(frame);
+  /* un téléphone dont l'écran bat à 90 ou 120 images par seconde n'en dessine que 60 : autant de
+   * travail en moins pour lui, sans rien changer au jeu, qui compte en secondes (voir touchQuality) */
+  if (G.cap60) {
+    const d = now - (G.rafT || now);
+    G.rafT = now;
+    G.capAcc = Math.min(50, (G.capAcc || 0) + d);
+    if (G.capAcc < 16 && G.last) return;
+    G.capAcc = Math.max(0, G.capAcc - 16.67);
+  }
   const raw = Math.max(0, (now - (G.last || now)) / 1000);
   const dt = Math.min(0.05, raw);
   G.last = now;
@@ -175,7 +184,9 @@ function frame(now) {
 const QW = { n: 0, sum: 0, mode: '', skip: 0 };
 function qualityWatch(dt, raw) {
   const watch = G.mode === 'play' || G.mode === 'menu';
-  if (!watch || R3.quality >= 3) { QW.mode = ''; return; }
+  /* un ordinateur descend du palier 0 au palier 3 ; un téléphone, du palier 4 au palier 5 */
+  const last = R3.quality >= 4 ? 5 : 3;
+  if (!watch || R3.quality >= last) { QW.mode = ''; return; }
   if (G.mode !== QW.mode) { QW.mode = G.mode; QW.n = QW.sum = 0; QW.skip = 30; return; }
   if (QW.skip > 0) { QW.skip--; return; }
   QW.n++; QW.sum += Math.min(raw, 0.1);
@@ -183,24 +194,36 @@ function qualityWatch(dt, raw) {
   const avg = QW.sum / QW.n;
   QW.n = QW.sum = 0;
   if (avg < (G.mode === 'play' ? 0.026 : 0.04)) return;
-  R3.quality = Math.min(3, (R3.quality || 0) + (avg > 0.06 ? 2 : 1));
+  R3.quality = Math.min(last, (R3.quality || 0) + (avg > 0.06 ? 2 : 1));
   applyQuality();
 }
 
 /* paliers : 0 tout au maximum ; 1 définition réduite, sans reflets ; 2 sans occlusion ambiante,
- * ombres 2048 ; 3 sans halo, ombres 1024, définition basse */
+ * ombres 2048 ; 3 sans halo, ombres 1024, définition basse. Les paliers d'un téléphone : 4 sans
+ * ombres projetées (la scène n'est plus dessinée qu'une fois par image), sans occlusion, halo ni
+ * lissage des bords, un point d'image par point de la page, des forêts plus clairsemées ; 5 de même,
+ * en définition basse */
 function applyQuality() {
   const q = R3.quality || 0;
   const dpr = window.devicePixelRatio || 1;
-  R3.r.setPixelRatio(q === 0 ? Math.min(dpr, 2) : q === 1 ? Math.min(dpr, 1.25) : q === 2 ? 1 : 0.75);
+  R3.r.setPixelRatio(q === 0 ? Math.min(dpr, 2) : q === 1 ? Math.min(dpr, 1.25) : q === 2 ? 1 : q === 4 ? Math.min(dpr, 1) : 0.75);
   R3.aoOn = q <= 1;
   R3.reflOn = q === 0;
+  const lite = q >= 4;
   const ms = q <= 1 ? 4096 : q === 2 ? 2048 : 1024;
   if (R3.sun.shadow.mapSize.x !== ms) {
     R3.sun.shadow.mapSize.set(ms, ms);
     if (R3.sun.shadow.map) { R3.sun.shadow.map.dispose(); R3.sun.shadow.map = null; }
   }
+  if (R3.sun.castShadow === lite) {
+    R3.sun.castShadow = !lite;
+    if (lite && R3.sun.shadow.map) { R3.sun.shadow.map.dispose(); R3.sun.shadow.map = null; }
+  }
+  const samples = lite ? 0 : 4;
+  if (R3.rtMain.samples !== samples) { R3.rtMain.samples = samples; R3.rtMain.dispose(); }
   R3.noBloom = q >= 3;
+  /* sur un téléphone, un peu moins de la moitié des arbres et des éboulis */
+  thinSet(lite ? 0.45 : 1);
   resize3D();
 }
 
