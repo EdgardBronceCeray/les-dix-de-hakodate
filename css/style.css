@@ -541,3 +541,77 @@ html.ja .side-block .stage-plate { letter-spacing: 0.08em; }
   .yard-panel { bottom: 44vh; }
   .yard-side { left: 4.5vw; right: 4.5vw; width: auto; bottom: 7vh; }
 }
+
+/* ---------- le jeu du bout des doigts (js/touch.js) : rien de ceci ne paraît au clavier ---------- */
+html.touch, html.touch body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+html.touch #sea { touch-action: none; }
+html.touch .menu { touch-action: pan-y; }
+html.touch .menu .item, html.touch .menu button { touch-action: manipulation; }
+.tpad { position: fixed; inset: 0; z-index: 6; pointer-events: none; }
+.tp-group { position: absolute; bottom: 16px; display: flex; gap: 12px; align-items: flex-end; }
+.tp-r { right: 18px; }
+.tp-col { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.tb { pointer-events: auto; touch-action: none; display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 18px; border: 1.5px solid rgba(230, 184, 90, 0.55); background: rgba(10, 16, 26, 0.42); color: var(--gold-1); font-family: var(--serif); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); }
+.tb i { font-style: normal; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
+.tb b { font-weight: 600; letter-spacing: 0.05em; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
+.tb.down { background: rgba(230, 184, 90, 0.38); border-color: var(--gold-1); }
+/* le manche : un cercle de laiton, un pommeau qu'on pousse du pouce ; on le saisit n'importe où dans
+ * le coin, et les flèches du cercle s'allument dans le sens où il mène */
+.tp-stick { position: absolute; left: 0; bottom: 0; width: 236px; height: 212px; pointer-events: auto; touch-action: none; }
+.tp-base { position: absolute; left: 30px; bottom: 20px; width: 168px; height: 168px; border-radius: 50%; border: 1.5px solid rgba(230, 184, 90, 0.55); background: radial-gradient(circle, rgba(10, 16, 26, 0.18) 0%, rgba(10, 16, 26, 0.5) 72%); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35), inset 0 0 0 10px rgba(230, 184, 90, 0.06); }
+.tp-a { position: absolute; font-style: normal; font-size: 15px; line-height: 1; color: var(--gold-1); opacity: 0.45; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7); transition: opacity 0.12s, color 0.12s; }
+.tp-a.lit { opacity: 1; color: #fff3cf; }
+.tp-n { left: 50%; top: 9px; transform: translateX(-50%); }
+.tp-s { left: 50%; bottom: 9px; transform: translateX(-50%); }
+.tp-w { top: 50%; left: 10px; transform: translateY(-50%); }
+.tp-e { top: 50%; right: 10px; transform: translateY(-50%); }
+.tp-knob { position: absolute; left: 78px; bottom: 68px; width: 72px; height: 72px; border-radius: 50%; border: 1.5px solid var(--gold-1); background: radial-gradient(circle at 36% 30%, rgba(255, 236, 180, 0.95), rgba(214, 160, 70, 0.85) 55%, rgba(120, 80, 30, 0.9)); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5); transition: transform 0.14s ease-out; pointer-events: none; }
+.tp-stick.on .tp-knob { transition: none; }
+.tp-stick.on .tp-base { border-color: var(--gold-1); }
+.tb-fire { width: 118px; height: 118px; border-radius: 50%; font-size: 23px; border-width: 2px; background: rgba(120, 30, 20, 0.45); }
+.tb-fire.down { background: rgba(220, 80, 40, 0.62); }
+.tb-enter { width: 118px; height: 46px; font-size: 16px; border-radius: 12px; }
+.tb-pause { position: absolute; left: 50%; top: 12px; margin-left: -32px; width: 64px; height: 44px; font-size: 15px; border-radius: 12px; }
+.tb-pause i { letter-spacing: -3px; }
+/* les plaques du navire et la carte se lèvent au-dessus des boutons */
+html.touch .bl { bottom: 214px; }
+html.touch .minimap { bottom: 202px; }
+/* la barre des touches se touche */
+html.touch .hints { gap: 10px; bottom: 2.4vh; right: 2vw; }
+html.touch .hints span { padding: 8px 12px; border: 1px solid rgba(230, 184, 90, 0.45); border-radius: 10px; background: rgba(8, 13, 22, 0.6); font-size: 14px; cursor: pointer; }
+html.touch .hints kbd { min-width: 32px; padding: 4px 8px; font-size: 16px; }
+html.touch .hints kbd.flash { background: var(--gold-2); color: #1a1006; }
+/* tenu à la verticale */
+#t-rotate { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6vw; padding: 0 12vw; background: radial-gradient(ellipse at center, #0e1a2a, #04080e); color: var(--ivory); text-align: center; font-size: 5vw; font-style: italic; }
+.t-phone { width: 16vw; height: 28vw; border: 1vw solid var(--gold-2); border-radius: 3vw; box-shadow: 0 0 4vw rgba(230, 184, 90, 0.35); animation: tphone 2.4s ease-in-out infinite; }
+@keyframes tphone { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
+/* sur un écran bas (un téléphone à l'horizontale), les blocs des menus défilent au doigt, au-dessus
+ * de la barre des touches, au lieu de déborder */
+html.touch .title-block, html.touch .side-block, html.touch .ship-panel, html.touch .story-head { bottom: 76px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding-right: 8px; }
+html.touch .title-block::-webkit-scrollbar, html.touch .side-block::-webkit-scrollbar, html.touch .ship-panel::-webkit-scrollbar, html.touch .story-head::-webkit-scrollbar { display: none; }
+html.touch .brief { bottom: 76px; overflow-y: auto; scrollbar-width: none; }
+html.touch .results, html.touch .pause-box { max-height: calc(100vh - 90px); overflow-y: auto; scrollbar-width: none; }
+html.touch .yard-panel, html.touch .yard-side { bottom: 76px; }
+html.touch .yard-side { max-height: calc(100vh - 90px); overflow-y: auto; scrollbar-width: none; }
+html.touch .recit { bottom: 76px; }
+html.touch .brief { align-items: start; grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr); }
+html.touch body { position: fixed; inset: 0; }
+html.touch .panel.wide { top: 44%; max-height: calc(100vh - 104px); }
+/* la description de la ligne choisie, quand le menu ne la tient pas, descend dans la bande libre du
+ * bas, à gauche des touches (js/touch.js) */
+html.touch #menu > .t-desc { position: absolute; left: 7vw; bottom: 12px; margin: 0; min-height: 0; max-width: none; font-size: 15px !important; line-height: 1.35; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.75); pointer-events: none; }
+/* un téléphone à l'horizontale (660 lignes au plus, plein écran compris) : chaque menu tient sans
+ * défiler. L'écran-titre range ses huit entrées sur deux colonnes, les modes puis les réglages ; dans
+ * les menus du corsaire et de l'arcade, seul le long texte défile, les choix restent en vue */
+@media (max-height: 660px) {
+  html.touch .screen-title .main-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(4, auto); grid-auto-flow: column; column-gap: 16px; }
+  html.touch .side-block { top: 5vh; display: flex; flex-direction: column; overflow: hidden; }
+  html.touch .side-block > * { flex: none; }
+  html.touch .side-block > .lead { flex: 0 1 auto; min-height: 4em; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+  html.touch .side-block > .lead::-webkit-scrollbar { display: none; }
+  html.touch .side-block > .lead.t-more { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 2.6em), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 2.6em), transparent); }
+  /* l'arcade se serre comme le corsaire le fait déjà sur un écran bas */
+  html.touch .side-block:not(.cors-block) > .record { margin-top: 10px; padding: 8px 18px; }
+  html.touch .side-block:not(.cors-block) > .main-list { margin-top: 2vh; }
+  html.touch .side-block:not(.cors-block) .item { font-size: 22px; padding: 7px 18px 7px 30px; }
+}
