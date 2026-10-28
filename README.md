@@ -7,12 +7,14 @@
 
 Pour partager le jeu, il faut envoyer tout le dossier (`index.html`, `css/`, `js/`, `img/`), pas seulement `index.html`.
 
-**Sur un téléphone ou une tablette**, on joue du bout des doigts (voir les troisième et quatrième mises à jour de la version 6) : le plus simple est d'ouvrir la page du jeu en ligne, <https://edgardbronceceray.github.io/les-dix-de-hakodate/>, le téléphone tenu à l'horizontale.
+**Sur un téléphone ou une tablette**, on joue du bout des doigts (voir les troisième, quatrième et cinquième mises à jour de la version 6) : le plus simple est d'ouvrir la page du jeu en ligne, <https://edgardbronceceray.github.io/les-dix-de-hakodate/>, le téléphone tenu à l'horizontale.
 
 Le jeu est rendu en 3D temps réel dans le navigateur (WebGL, avec la bibliothèque Three.js, incluse dans `js/lib/`). Au premier lancement, la préparation de la mer et des îles prend quelques secondes.
 
-Ceci est la **version 6, quatrième mise à jour** (voir juste en dessous). Les versions précédentes sont gardées telles quelles :
+Ceci est la **version 6, sixième mise à jour** (voir juste en dessous). Les versions précédentes sont gardées telles quelles :
 
+- `version-6-mise-a-jour-5/` : la version 6 après sa cinquième mise à jour (le jeu allégé sur téléphone) ;
+- `version-6-mise-a-jour-4/` : la version 6 après sa quatrième mise à jour (le manche, sur téléphone) ;
 - `version-6-mise-a-jour-3/` : la version 6 après sa troisième mise à jour (le jeu sur un téléphone, avec des flèches de chaque côté de l'écran) ;
 - `version-6-mise-a-jour-2/` : la version 6 après sa deuxième mise à jour (les chaloupes, les défenses des villes, les navires de l'ordinateur à leur taille, l'enfilade, le didacticiel) ;
 - `version-6-mise-a-jour-1/` : la version 6 après sa première mise à jour (les voiles du corsaire, comme sur les navires de l'époque) ;
@@ -36,6 +38,28 @@ Ceci est la **version 6, quatrième mise à jour** (voir juste en dessous). Les 
 - `version-2/` : la version 2 (cadence de tir, débris variés, caméra qui monte avec la vitesse, graphismes au maximum) ;
 - `version-2-navires/` : la version 2 avec les navires refaits (roues à aubes, voiles, canons, équipage) ;
 - `ancienne-version-arcade/`, `ancienne-version-simulation/`, `ancienne-version-2d/`, `ancienne-version-3d/` : les essais d'avant.
+
+## La sixième mise à jour de la version 6
+
+**La page Facebook, à l'écran-titre.** En haut à droite de l'écran-titre, un carton invite à suivre la page Facebook des Dix de Hakodate : on y suit l'actualité de la BD et des jeux, et tout l'univers des Français au Japon au temps des samouraïs. On le voit à chaque lancement, sans fenêtre qui interrompt le jeu ; un clic, ou un toucher sur un téléphone, ouvre la page dans un nouvel onglet. Il est en français, en anglais et en japonais. Sur un écran de moins de 1 080 points de large (une fenêtre étroite, une tablette tenue à la verticale), il s'efface pour laisser la place au titre.
+
+**Vérifié** sur ordinateur (1 280 × 720 dans les trois langues, et 1 920 × 1 080) et sur un iPhone simulé : le carton ne chevauche ni le titre, ni De Nicol, ni la barre des touches ; un clic, ou un toucher, ouvre la page dans un nouvel onglet sans rien changer au menu. Les parties, elles, ne changent pas.
+
+## La cinquième mise à jour de la version 6
+
+**Le jeu allégé sur téléphone.** Sur un téléphone, le jeu ramait : il dessinait chaque image comme pour un ordinateur, la scène trois fois (pour les ombres, pour l'ombrage des recoins, puis pour l'image elle-même), suivie de six passes de flou pour le halo. Les téléphones et les tablettes ont désormais leur propre réglage :
+
+- **une seule passe** : ni ombres projetées, ni ombrage des recoins, ni halo, ni lissage des bords ;
+- **un point d'image par point de la page**, au lieu d'un et quart : un tiers de points en moins à calculer ;
+- **des forêts et des éboulis plus clairsemés** : un peu moins de la moitié des arbres et des rochers, pris dans toute la forêt, pour qu'aucune colline ne paraisse pelée ;
+- **soixante images par seconde au plus**, même sur un écran qui en affiche quatre-vingt-dix ou cent vingt : autant de travail en moins, sans rien changer au jeu, qui compte en secondes ;
+- **si le téléphone peine encore**, le jeu baisse de lui-même sa définition d'un cran.
+
+Ce qu'on y gagne, compté sur un iPhone 13 simulé : en corsaire, devant Hakodate, une image ne demande plus que 36 dessins et 70 000 triangles, au lieu de 121 dessins et 295 000 triangles ; à l'écran-titre, 265 dessins et 332 000 triangles, au lieu de 663 et plus d'un million. Le jeu est un peu moins beau sur un téléphone (les navires ne portent plus d'ombre sur l'eau, les forêts sont moins denses), mais rien ne manque à la partie.
+
+Sur ordinateur, rien ne change : mêmes réglages, même image (les arbres sont seulement rangés dans un autre ordre, ce qui ne se voit pas), mêmes parties rejouées à l'identique.
+
+**Vérifié** sur un iPhone 13 simulé : le réglage du téléphone se met de lui-même en place, le parcours au doigt (menus, didacticiel, manche, feu, pause) marche comme avant, et les images de l'écran-titre et du corsaire comptent ce qui est dit plus haut. Sur ordinateur : ni réglage nouveau ni différence, et les parties rejouées à l'identique (les neuf étapes de l'histoire, quatre parties d'arcade) donnent les mêmes positions, les mêmes coups et les mêmes scores. La vitesse réelle, elle, se juge sur un vrai téléphone : un téléphone simulé ne la mesure pas.
 
 ## La quatrième mise à jour de la version 6
 
