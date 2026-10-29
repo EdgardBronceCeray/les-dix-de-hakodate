@@ -11,8 +11,9 @@ Pour partager le jeu, il faut envoyer tout le dossier (`index.html`, `css/`, `js
 
 Le jeu est rendu en 3D temps réel dans le navigateur (WebGL, avec la bibliothèque Three.js, incluse dans `js/lib/`). Au premier lancement, la préparation de la mer et des îles prend quelques secondes.
 
-Ceci est la **version 6, sixième mise à jour** (voir juste en dessous). Les versions précédentes sont gardées telles quelles :
+Ceci est la **version 6, septième mise à jour** (voir juste en dessous). Les versions précédentes sont gardées telles quelles :
 
+- `version-6-mise-a-jour-6/` : la version 6 après sa sixième mise à jour (la page Facebook à l'écran-titre) ;
 - `version-6-mise-a-jour-5/` : la version 6 après sa cinquième mise à jour (le jeu allégé sur téléphone) ;
 - `version-6-mise-a-jour-4/` : la version 6 après sa quatrième mise à jour (le manche, sur téléphone) ;
 - `version-6-mise-a-jour-3/` : la version 6 après sa troisième mise à jour (le jeu sur un téléphone, avec des flèches de chaque côté de l'écran) ;
@@ -38,6 +39,14 @@ Ceci est la **version 6, sixième mise à jour** (voir juste en dessous). Les ve
 - `version-2/` : la version 2 (cadence de tir, débris variés, caméra qui monte avec la vitesse, graphismes au maximum) ;
 - `version-2-navires/` : la version 2 avec les navires refaits (roues à aubes, voiles, canons, équipage) ;
 - `ancienne-version-arcade/`, `ancienne-version-simulation/`, `ancienne-version-2d/`, `ancienne-version-3d/` : les essais d'avant.
+
+## La septième mise à jour de la version 6
+
+**La fumée, entière.** Chaque bouffée de fumée est une image plate tournée vers la caméra. Vue d'en haut et de biais, sa moitié basse passait sous la surface de la mer, qui la coupait d'un trait net : la fumée d'une grosse explosion (la soute du Chōyō qui saute, à Hakodate) tombait en bandes horizontales, et celle des bordées et des cheminées perdait le bas de ses volutes. Chaque bouffée est désormais avancée vers la caméra d'autant que sa taille : à l'écran, elle reste exactement à sa place, mais elle passe tout entière devant l'eau. Les lueurs (le feu des canons, les incendies, les explosions) sont traitées de même ; l'écume, posée sur l'eau, ne change pas.
+
+**En anglais, au chantier**, la consigne qui finit par « Set sail » portait des guillemets à la française ; elle a désormais ceux de l'anglais, comme les autres textes.
+
+**Vérifié** sur ordinateur : l'explosion du Chōyō n'a plus de bandes, la fumée des bordées et des cheminées est entière, et le reste de l'image ne change pas (l'écran-titre et une bordée du corsaire, comparés avant et après). Les parties ne changent pas : seul le dessin de la fumée et des lueurs est touché.
 
 ## La sixième mise à jour de la version 6
 
