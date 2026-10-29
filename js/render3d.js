@@ -450,6 +450,7 @@ function setWaterLand(mask) {
 
 const PART_VS = `
 attribute vec3 iPos; attribute vec4 iCol; attribute float iSize; attribute float iSeed;
+uniform float uLift;
 varying vec4 vCol; varying vec2 vUv; varying float vSeed;
 void main() {
   vCol = iCol; vUv = position.xy; vSeed = iSeed;
@@ -457,6 +458,10 @@ void main() {
   float a = iSeed * 6.2832;
   vec2 c = mat2(cos(a), -sin(a), sin(a), cos(a)) * position.xy;
   mv.xy += c * iSize;
+  /* la bouffée fait face à la caméra : sa moitié basse plongeait sous la mer, qui la coupait d'un
+   * trait net (la fumée d'une explosion tombait en bandes). On l'avance vers la caméra d'autant que
+   * sa taille : à l'écran, rien ne bouge, mais elle passe tout entière devant l'eau */
+  mv.z += iSize * uLift;
   gl_Position = projectionMatrix * mv;
 }`;
 const PART_FS = `
@@ -486,7 +491,7 @@ void main() {
   gl_FragColor = vec4(col, vCol.a * a);
 }`;
 
-function makePartSystem(max, additive, soft) {
+function makePartSystem(max, additive, soft, lift) {
   const base = new THREE.PlaneGeometry(1, 1);
   const g = new THREE.InstancedBufferGeometry();
   g.index = base.index;
@@ -500,7 +505,7 @@ function makePartSystem(max, additive, soft) {
   g.instanceCount = 0;
   const m = new THREE.ShaderMaterial({
     vertexShader: PART_VS, fragmentShader: PART_FS, transparent: true, depthWrite: false,
-    blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, uniforms: { uSoft: { value: soft ? 1 : 0 }, uLit: { value: soft ? 1 : 0 }, uTime: { value: 0 }, uSunV: { value: new THREE.Vector3(0, 1, 0) } },
+    blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, uniforms: { uSoft: { value: soft ? 1 : 0 }, uLit: { value: soft ? 1 : 0 }, uLift: { value: lift || 0 }, uTime: { value: 0 }, uSunV: { value: new THREE.Vector3(0, 1, 0) } },
   });
   const mesh = new THREE.Mesh(g, m);
   mesh.frustumCulled = false;
@@ -511,9 +516,10 @@ function makePartSystem(max, additive, soft) {
 }
 
 function buildParticles() {
-  R3.pSmoke = makePartSystem(2600, false, true);
-  R3.pFoam = makePartSystem(2600, false, false);
-  R3.pGlow = makePartSystem(1600, true, false);
+  /* la fumée et les lueurs passent tout entières devant la mer ; l'écume, elle, reste posée dessus */
+  R3.pSmoke = makePartSystem(2600, false, true, 1);
+  R3.pFoam = makePartSystem(2600, false, false, 0);
+  R3.pGlow = makePartSystem(1600, true, false, 1);
   R3.extra = [];          // particules propres au rendu (traînées, étincelles)
 }
 

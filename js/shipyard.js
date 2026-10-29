@@ -532,7 +532,7 @@ addStr({
   'yard.flag': ['vous êtes à bord', 'you are aboard', '乗艦中'],
   'yard.lrKey': ['atelier, navire, peinture, consigne', 'workshop, ship, paint, orders', '工房・艦・塗装・命令'],
   'yard.k.buy': ['acheter', 'buy', '購入'],
-  'yard.first': ['Choisissez vos pièces : ↑ ↓ pour la ligne, Entrée pour acheter, ← → pour changer d\'atelier. Puis « Prendre la mer ».', 'Choose your parts: ↑ ↓ for the line, Enter to buy, ← → to change workshop. Then « Set sail ».', '部品を選ぼう：↑↓で行、Enterで購入、←→で工房を替える。終われば「出航する」。'],
+  'yard.first': ['Choisissez vos pièces : ↑ ↓ pour la ligne, Entrée pour acheter, ← → pour changer d\'atelier. Puis « Prendre la mer ».', 'Choose your parts: ↑ ↓ for the line, Enter to buy, ← → to change workshop. Then "Set sail".', '部品を選ぼう：↑↓で行、Enterで購入、←→で工房を替える。終われば「出航する」。'],
   'yard.p.shop': ['Atelier', 'Workshop', '工房'],
   'yard.w.coque': ['coque et voilure', 'hull and sails', '船体と帆'],
   'yard.w.arme': ['artillerie', 'guns', '砲術'],
